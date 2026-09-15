@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Mnemora.Api/Mnemora.Api.csproj" />
+    <Project Path="src/Mnemora.Application/Mnemora.Application.csproj" />
+    <Project Path="src/Mnemora.Domain/Mnemora.Domain.csproj" />
+    <Project Path="src/Mnemora.Infrastructure/Mnemora.Infrastructure.csproj" />
+  </Folder>
+</Solution>
