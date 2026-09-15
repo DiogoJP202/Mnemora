@@ -5,4 +5,7 @@
     <Project Path="src/Mnemora.Domain/Mnemora.Domain.csproj" />
     <Project Path="src/Mnemora.Infrastructure/Mnemora.Infrastructure.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Mnemora.Tests/Mnemora.Tests.csproj" />
+  </Folder>
 </Solution>
