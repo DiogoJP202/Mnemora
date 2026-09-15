@@ -10,6 +10,7 @@ var connectionString = builder.Configuration.GetConnectionString("Default") ?? "
 var webOrigin = builder.Configuration["Mnemora:WebOrigin"] ?? "http://localhost:3000";
 
 builder.Services.AddDbContext<MnemoraDbContext>(options => options.UseSqlite(connectionString));
+builder.Services.AddScoped<KnowledgeReader>();
 builder.Services
     .AddIdentity<IdentityUser<Guid>, IdentityRole<Guid>>(options =>
     {
@@ -127,6 +128,7 @@ app.Use(async (context, next) =>
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapAuthEndpoints();
+app.MapKnowledgeEndpoints();
 app.Run();
 
 public partial class Program;
