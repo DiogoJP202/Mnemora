@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Mnemora.Api;
+using Mnemora.Application;
 using Mnemora.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,8 @@ var webOrigin = builder.Configuration["Mnemora:WebOrigin"] ?? "http://localhost:
 builder.Services.AddDbContext<MnemoraDbContext>(options => options.UseSqlite(connectionString));
 builder.Services.AddScoped<KnowledgeReader>();
 builder.Services.AddScoped<BookConsistency>();
+builder.Services.AddHttpClient<IBookMetadataProvider, GoogleBooksProvider>(
+    client => client.Timeout = TimeSpan.FromSeconds(8));
 builder.Services
     .AddIdentity<IdentityUser<Guid>, IdentityRole<Guid>>(options =>
     {
@@ -67,6 +70,25 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = 20,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+    options.AddPolicy("catalog-external", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 30,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            }));
+    options.AddPolicy("import-external", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value
+                ?? context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 10,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0
             }));
@@ -136,6 +158,8 @@ app.Use(async (context, next) =>
 
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapAuthEndpoints();
+app.MapBooksEndpoints();
+app.MapLibraryEndpoints();
 app.MapKnowledgeEndpoints();
 app.MapAdminBookEndpoints();
 app.MapAdminLoreEndpoints();

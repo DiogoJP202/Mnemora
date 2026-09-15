@@ -22,6 +22,10 @@ Para criar o pack demonstrativo e um Admin local, configure `ADMIN_EMAIL` e `ADM
 
 Os endpoints administrativos usam `/api/admin` e exigem a role Admin. Cada escrita pela interface obtém um token em `GET /api/auth/csrf` e o envia no header `X-CSRF-TOKEN`. O backend devolve 401 sem sessão e 403 para leitor sem role Admin.
 
+Na jornada do leitor, o catálogo local está em `GET /api/books` e a busca em `GET /api/books/search?q=...`. A busca externa pelo Google Books só é habilitada com `GOOGLE_BOOKS_API_KEY`; sem chave, a busca local continua funcionando. A importação de um resultado externo ocorre em `POST /api/library/external` e é idempotente por identificador do provider. O Mnemora importa apenas metadados bibliográficos: a descrição externa não entra no catálogo, pois pode revelar partes da história.
+
+A biblioteca pertence à sessão autenticada (`GET /api/library`). O leitor adiciona um livro com `POST /api/library/{bookId}`, escolhe uma unidade com `PATCH /api/library/{bookId}/progress` e pode retroceder a qualquer momento. A página opcional é uma referência pessoal, sem efeito sobre a visibilidade do lore. Em `GET /api/books/{bookId}/reading-units`, títulos de unidades ainda não alcançadas são substituídos por rótulos neutros. O status “Finished” também não substitui uma unidade de progresso válida para o motor antisspoiler.
+
 Validações usuais:
 
 ```powershell
