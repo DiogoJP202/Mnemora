@@ -3,9 +3,10 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Mnemora.Domain;
 using Mnemora.Infrastructure;
 
@@ -20,11 +21,13 @@ public sealed class KnowledgeEndpointTests
         using var factory = new WebApplicationFactory<Program>().WithWebHostBuilder(web =>
         {
             web.UseEnvironment("Development");
-            web.ConfigureAppConfiguration((_, configuration) =>
-                configuration.AddInMemoryCollection(new Dictionary<string, string?>
-                {
-                    ["ConnectionStrings:Default"] = $"Data Source={dbFile}"
-                }));
+            web.ConfigureTestServices(services =>
+            {
+                services.RemoveAll<DbContextOptions<MnemoraDbContext>>();
+                services.RemoveAll<MnemoraDbContext>();
+                services.AddDbContext<MnemoraDbContext>(options =>
+                    options.UseSqlite($"Data Source={dbFile}"));
+            });
         });
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions
         {
@@ -35,9 +38,10 @@ public sealed class KnowledgeEndpointTests
             (await client.GetAsync("/api/books/00000000-0000-0000-0000-000000000001/entities")).StatusCode);
         var csrfResponse = await client.GetFromJsonAsync<JsonElement>("/api/auth/csrf");
         var token = csrfResponse.GetProperty("token").GetString();
+        var email = $"reader-{Guid.NewGuid():N}@test.local";
         using var register = new HttpRequestMessage(HttpMethod.Post, "/api/auth/register")
         {
-            Content = JsonContent.Create(new { email = "reader@test.local", password = "StrongTestPass123" })
+            Content = JsonContent.Create(new { email, password = "StrongTestPass123" })
         };
         register.Headers.Add("X-CSRF-TOKEN", token);
         var registerResponse = await client.SendAsync(register);

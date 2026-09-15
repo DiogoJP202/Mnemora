@@ -11,6 +11,7 @@ var webOrigin = builder.Configuration["Mnemora:WebOrigin"] ?? "http://localhost:
 
 builder.Services.AddDbContext<MnemoraDbContext>(options => options.UseSqlite(connectionString));
 builder.Services.AddScoped<KnowledgeReader>();
+builder.Services.AddScoped<BookConsistency>();
 builder.Services
     .AddIdentity<IdentityUser<Guid>, IdentityRole<Guid>>(options =>
     {
@@ -85,6 +86,13 @@ if (app.Environment.IsDevelopment())
     var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
     await db.Database.MigrateAsync();
 }
+if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
+{
+    await using var scope = app.Services.CreateAsyncScope();
+    var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+    await db.Database.MigrateAsync();
+    await SeedData.RunAsync(scope.ServiceProvider, builder.Configuration, app.Logger);
+}
 
 app.UseRouting();
 app.UseCors("web");
@@ -129,6 +137,9 @@ app.Use(async (context, next) =>
 app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapAuthEndpoints();
 app.MapKnowledgeEndpoints();
+app.MapAdminBookEndpoints();
+app.MapAdminLoreEndpoints();
+app.MapAdminRelationEndpoints();
 app.Run();
 
 public partial class Program;
