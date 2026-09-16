@@ -32,17 +32,29 @@ public static class KnowledgeEndpoints
             Guid bookId, string? q, ClaimsPrincipal user, KnowledgeReader reader) =>
         {
             var scope = await reader.ScopeAsync(UserId(user), bookId);
-            return scope is null ? Results.NotFound()
-                : Results.Ok(await reader.EntitiesAsync(scope, query: q));
-        });
+            if (scope is null) return Results.NotFound();
+            var query = q?.Trim() ?? string.Empty;
+            if (query.Length == 0)
+                return Results.Ok(Array.Empty<Mnemora.Application.LoreEntitySummaryDto>());
+            if (query.Length > 100)
+                return Results.Problem("Busca muito longa.",
+                    statusCode: StatusCodes.Status400BadRequest);
+            return Results.Ok(await reader.RecallAsync(scope, query));
+        }).RequireRateLimiting("recall");
 
         lore.MapGet("/books/{bookId:guid}/recall", async (
             Guid bookId, string? q, ClaimsPrincipal user, KnowledgeReader reader) =>
         {
             var scope = await reader.ScopeAsync(UserId(user), bookId);
-            return scope is null ? Results.NotFound()
-                : Results.Ok(await reader.EntitiesAsync(scope, query: q));
-        });
+            if (scope is null) return Results.NotFound();
+            var query = q?.Trim() ?? string.Empty;
+            if (query.Length == 0)
+                return Results.Ok(Array.Empty<Mnemora.Application.LoreEntitySummaryDto>());
+            if (query.Length > 100)
+                return Results.Problem("Busca muito longa.",
+                    statusCode: StatusCodes.Status400BadRequest);
+            return Results.Ok(await reader.RecallAsync(scope, query));
+        }).RequireRateLimiting("recall");
 
         lore.MapGet("/books/{bookId:guid}/timeline", async (
             Guid bookId, ClaimsPrincipal user, KnowledgeReader reader) =>

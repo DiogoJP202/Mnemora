@@ -28,6 +28,8 @@ A biblioteca pertence à sessão autenticada (`GET /api/library`). O leitor adic
 
 Para explorar o pack de um livro da biblioteca, use `GET /api/books/{bookId}/entities` (opcional `type`), `/factions`, `/locations` e `/timeline`; o detalhe fica em `GET /api/entities/{entityId}`. Todos esses resultados passam pelo `KnowledgeReader` e são calculados novamente após cada alteração de progresso. Uma entidade futura responde 404 mesmo quando seu identificador é conhecido por outro meio.
 
+O Recall usa `GET /api/books/{bookId}/recall?q=...`. Termos vazios devolvem uma lista vazia e termos acima de 100 caracteres são rejeitados. A consulta ignora diferenças de caixa e diacríticos, procura somente em entidades, resumos, aliases, fatos e pistas já visíveis, retorna no máximo 12 resumos seguros e não indica se um termo existe em conteúdo futuro.
+
 Validações usuais:
 
 ```powershell

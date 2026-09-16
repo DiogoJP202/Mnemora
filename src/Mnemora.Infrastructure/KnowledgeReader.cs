@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Mnemora.Application;
 using Mnemora.Domain;
+using System.Globalization;
+using System.Text;
 
 namespace Mnemora.Infrastructure;
 
@@ -94,6 +96,38 @@ public sealed class KnowledgeReader(MnemoraDbContext db)
         return await SummariesAsync(scope, rows);
     }
 
+    public async Task<IReadOnlyList<LoreEntitySummaryDto>> RecallAsync(
+        KnowledgeScope scope, string query)
+    {
+        var term = NormalizeSearchText(query.Trim());
+        if (term.Length == 0) return [];
+
+        // Each source is filtered by the spoiler policy in SQL first. Matching the
+        // already-safe rows in .NET gives pt-BR searches Unicode case/diacritic folding,
+        // which SQLite's built-in LOWER/NOCASE do not provide.
+        var entities = await KnownEntities(scope).OrderByDescending(x => x.Importance)
+            .ThenBy(x => x.Name).ToListAsync();
+        if (entities.Count == 0) return [];
+
+        var matches = entities.Where(entity =>
+                ContainsNormalized(entity.Name, term)
+                || ContainsNormalized(entity.ShortDescription, term))
+            .Select(entity => entity.Id).ToHashSet();
+        var aliases = await KnownAliases(scope)
+            .Select(x => new { x.EntityId, x.Alias }).ToListAsync();
+        foreach (var alias in aliases)
+            if (ContainsNormalized(alias.Alias, term)) matches.Add(alias.EntityId);
+        var facts = await KnownFacts(scope)
+            .Select(x => new { x.EntityId, x.Content, x.MemoryHint }).ToListAsync();
+        foreach (var fact in facts)
+            if (ContainsNormalized(fact.Content, term)
+                || ContainsNormalized(fact.MemoryHint, term))
+                matches.Add(fact.EntityId);
+
+        var rows = entities.Where(x => matches.Contains(x.Id)).Take(12).ToList();
+        return await SummariesAsync(scope, rows);
+    }
+
     public async Task<LoreEntityDetailDto?> EntityAsync(KnowledgeScope scope, Guid entityId)
     {
         var entity = await KnownEntities(scope).FirstOrDefaultAsync(x => x.Id == entityId);
@@ -141,5 +175,18 @@ public sealed class KnowledgeReader(MnemoraDbContext db)
         return entities.Select(x => new LoreEntitySummaryDto(x.Id, x.BookId, x.Type.ToString(),
             x.Name, x.ShortDescription, x.ImageUrl,
             hintByEntity.GetValueOrDefault(x.Id))).ToList();
+    }
+
+    private static bool ContainsNormalized(string? value, string term) =>
+        value is not null && NormalizeSearchText(value).Contains(term, StringComparison.Ordinal);
+
+    private static string NormalizeSearchText(string value)
+    {
+        var decomposed = value.Normalize(NormalizationForm.FormD);
+        var normalized = new StringBuilder(decomposed.Length);
+        foreach (var character in decomposed)
+            if (CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark)
+                normalized.Append(char.ToUpperInvariant(character));
+        return normalized.ToString().Normalize(NormalizationForm.FormC);
     }
 }
