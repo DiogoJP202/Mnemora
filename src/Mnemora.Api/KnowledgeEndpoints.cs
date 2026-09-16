@@ -19,7 +19,9 @@ public static class KnowledgeEndpoints
             LoreEntityType? entityType = null;
             if (!string.IsNullOrWhiteSpace(type))
             {
-                if (!Enum.TryParse<LoreEntityType>(type, true, out var parsed))
+                if (!type.All(char.IsLetter)
+                    || !Enum.TryParse<LoreEntityType>(type, true, out var parsed)
+                    || !Enum.IsDefined(parsed))
                     return Results.BadRequest();
                 entityType = parsed;
             }

@@ -26,6 +26,8 @@ Na jornada do leitor, o catálogo local está em `GET /api/books` e a busca em `
 
 A biblioteca pertence à sessão autenticada (`GET /api/library`). O leitor adiciona um livro com `POST /api/library/{bookId}`, escolhe uma unidade com `PATCH /api/library/{bookId}/progress` e pode retroceder a qualquer momento. A página opcional é uma referência pessoal, sem efeito sobre a visibilidade do lore. Em `GET /api/books/{bookId}/reading-units`, títulos de unidades ainda não alcançadas são substituídos por rótulos neutros. O status “Finished” também não substitui uma unidade de progresso válida para o motor antisspoiler.
 
+Para explorar o pack de um livro da biblioteca, use `GET /api/books/{bookId}/entities` (opcional `type`), `/factions`, `/locations` e `/timeline`; o detalhe fica em `GET /api/entities/{entityId}`. Todos esses resultados passam pelo `KnowledgeReader` e são calculados novamente após cada alteração de progresso. Uma entidade futura responde 404 mesmo quando seu identificador é conhecido por outro meio.
+
 Validações usuais:
 
 ```powershell
