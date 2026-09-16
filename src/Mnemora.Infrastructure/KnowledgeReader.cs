@@ -128,6 +128,13 @@ public sealed class KnowledgeReader(MnemoraDbContext db)
         return await SummariesAsync(scope, rows);
     }
 
+    public async Task<IReadOnlyList<LoreEntitySummaryDto>> ReviewAsync(KnowledgeScope scope)
+    {
+        var rows = await KnownEntities(scope).OrderByDescending(x => x.Importance)
+            .ThenBy(x => x.Name).Take(5).ToListAsync();
+        return await SummariesAsync(scope, rows);
+    }
+
     public async Task<LoreEntityDetailDto?> EntityAsync(KnowledgeScope scope, Guid entityId)
     {
         var entity = await KnownEntities(scope).FirstOrDefaultAsync(x => x.Id == entityId);

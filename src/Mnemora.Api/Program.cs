@@ -171,6 +171,7 @@ app.MapAuthEndpoints();
 app.MapBooksEndpoints();
 app.MapLibraryEndpoints();
 app.MapKnowledgeEndpoints();
+app.MapMemoryEndpoints();
 app.MapAdminBookEndpoints();
 app.MapAdminLoreEndpoints();
 app.MapAdminRelationEndpoints();

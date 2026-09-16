@@ -30,6 +30,10 @@ Para explorar o pack de um livro da biblioteca, use `GET /api/books/{bookId}/ent
 
 O Recall usa `GET /api/books/{bookId}/recall?q=...`. Termos vazios devolvem uma lista vazia e termos acima de 100 caracteres são rejeitados. A consulta ignora diferenças de caixa e diacríticos, procura somente em entidades, resumos, aliases, fatos e pistas já visíveis, retorna no máximo 12 resumos seguros e não indica se um termo existe em conteúdo futuro.
 
+Notas privadas usam `GET/POST /api/books/{bookId}/notes` e `PUT/DELETE /api/notes/{noteId}`. O conteúdo deve ter de 1 a 4.000 caracteres. Notas gerais permanecem disponíveis mesmo sem um ponto de leitura; notas ligadas a entidade ou unidade só aparecem enquanto essa referência estiver dentro do progresso atual. O parâmetro opcional `entityId` filtra a lista para a tela de uma entidade. Todos os acessos usam o usuário da sessão e IDs alheios respondem 404.
+
+A revisão usa `GET /api/books/{bookId}/review` para selecionar, de forma determinística, até cinco entidades conhecidas. `POST /api/books/{bookId}/review/{entityId}` com `{ "remembered": true|false }` registra “Eu lembro” ou “Preciso revisar”. O registro não libera informação e uma entidade fora do ponto de leitura responde 404.
+
 Validações usuais:
 
 ```powershell

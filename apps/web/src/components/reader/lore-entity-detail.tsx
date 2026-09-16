@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { BookLoreNav } from "@/components/reader/book-lore-nav";
+import { NotesPanel } from "@/components/reader/notes-panel";
 import { apiGet } from "@/lib/api";
 import type { LoreEntityDetail, LoreRelation } from "@/lib/lore-types";
 
@@ -71,5 +72,6 @@ export function LoreEntityDetailView({ bookId, entityId }: { bookId: string; ent
       <section aria-labelledby="facts-title"><span className="section-index">O QUE VOCÊ JÁ SABE</span><h2 id="facts-title">Lembranças reveladas</h2>{facts.length > 0 ? <div className="fact-list">{facts.map((fact) => <article className="fact-card" key={fact.id}><span>{factLabel[fact.type] ?? fact.type}</span><p>{fact.content}</p>{fact.memoryHint && <small>{fact.memoryHint}</small>}</article>)}</div> : <div className="knowledge-empty"><p>Ainda não há fatos registrados neste ponto da leitura.</p></div>}</section>
       <aside aria-labelledby="relations-title"><span className="section-index">CONEXÕES CONHECIDAS</span><h2 id="relations-title">Relações</h2>{relations.length > 0 ? <div className="relation-list">{relations.map((relation) => <RelatedEntity key={relation.id} relation={relation} entityId={entity.id} bookId={bookId} />)}</div> : <div className="knowledge-empty"><p>Nenhuma relação foi revelada até aqui.</p></div>}</aside>
     </div>
+    <NotesPanel bookId={bookId} entityId={entity.id} compact />
   </div>;
 }

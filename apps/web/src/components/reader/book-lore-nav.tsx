@@ -8,6 +8,8 @@ const sections = [
   { segment: "/locations", label: "Lugares" },
   { segment: "/timeline", label: "Linha do tempo" },
   { segment: "/recall", label: "Recall" },
+  { segment: "/notes", label: "Notas" },
+  { segment: "/review", label: "Revisão" },
 ];
 
 export function BookLoreNav({ bookId, active }: { bookId: string; active: string }) {
