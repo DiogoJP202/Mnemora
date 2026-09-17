@@ -68,7 +68,7 @@ As verificações finais da fase 10 produziram estes resultados:
 
 | Verificação | Resultado observado | Cobertura principal |
 | --- | --- | --- |
-| `dotnet test Mnemora.slnx` | 27 testes aprovados | Domínio, integridade, autenticação, antiforgery, seed administrativo, biblioteca, administração, fronteiras de lore, Recall, notas e revisão |
+| `dotnet test Mnemora.slnx` | 28 testes aprovados | Domínio, integridade, autenticação, antiforgery, persistência das chaves de proteção, seed administrativo, biblioteca, administração, fronteiras de lore, Recall, notas e revisão |
 | `node --test tests/pwa/pwa-assets.test.mjs` | 4 testes aprovados | Manifesto, dimensões dos ícones, pré-cache público e exclusão de rotas privadas |
 | `dotnet build Mnemora.slnx` | Build aprovado | Solução e referências entre as quatro camadas |
 | `npm run lint` em `apps/web` | Aprovado | ESLint/Next.js |
@@ -82,7 +82,7 @@ As verificações finais da fase 10 produziram estes resultados:
 | Auditorias de dependências | 0 vulnerabilidades npm e NuGet | Dependências diretas e transitivas disponíveis aos gerenciadores |
 | Busca de segredos no diff | Nenhum segredo real detectado | Arquivos versionados e alterações da fase 10 |
 
-Os 27 testes .NET incluem os casos críticos pedidos no aceite: antes, exatamente no ponto e depois da revelação; ausência de progresso; entidade, alias, fato, relação e evento futuros; avanço e retrocesso; título neutro; termo futuro no Recall; biblioteca e notas de outro usuário; limite de cinco itens na revisão; quotas de notas e histórico de revisão; role Admin; consistência de reordenação; preview com projeção segura; rejeição de escrita sem antiforgery; e impossibilidade de promover uma conta existente com senha divergente durante o seed.
+Os 28 testes .NET incluem os casos críticos pedidos no aceite: antes, exatamente no ponto e depois da revelação; ausência de progresso; entidade, alias, fato, relação e evento futuros; avanço e retrocesso; título neutro; termo futuro no Recall; biblioteca e notas de outro usuário; limite de cinco itens na revisão; quotas de notas e histórico de revisão; role Admin; consistência de reordenação; preview com projeção segura; rejeição de escrita sem antiforgery; persistência das chaves de proteção quando configurada; e impossibilidade de promover uma conta existente com senha divergente durante o seed.
 
 A afirmação “zero violações” se limita às páginas e estados visitados pela auditoria automatizada. Ela não substitui avaliação manual completa com leitores de tela, diferentes tecnologias assistivas ou uma auditoria de conteúdo editorial.
 

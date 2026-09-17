@@ -1,0 +1,33 @@
+# yaml-language-server: $schema=https://render.com/schema/render.yaml.json
+
+services:
+  - type: web
+    name: mnemora
+    runtime: docker
+    region: virginia
+    plan: 0.5c-512mb
+    branch: main
+    numInstances: 1
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /api/health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://127.0.0.1:5100
+      - key: API_BASE_URL
+        value: http://127.0.0.1:5100
+      - key: ConnectionStrings__Default
+        value: Data Source=/var/data/mnemora.db
+      - key: Mnemora__DataProtectionKeysPath
+        value: /var/data/keys
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+    disk:
+      name: mnemora-data
+      mountPath: /var/data
+      sizeGB: 1

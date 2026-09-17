@@ -5,6 +5,7 @@ const scriptPolicy = process.env.NODE_ENV === "development"
   : "script-src 'self' 'unsafe-inline'";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   async headers() {
     return [
       {

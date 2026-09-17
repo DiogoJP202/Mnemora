@@ -1,6 +1,7 @@
 using System.Net;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -11,8 +12,16 @@ using Mnemora.Infrastructure;
 var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("Default") ?? "Data Source=mnemora.db";
 var webOrigin = builder.Configuration["Mnemora:WebOrigin"] ?? "http://localhost:3000";
+var dataProtectionKeysPath = builder.Configuration["Mnemora:DataProtectionKeysPath"];
 
 builder.Services.AddDbContext<MnemoraDbContext>(options => options.UseSqlite(connectionString));
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("Mnemora");
+if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
+{
+    var keysDirectory = new DirectoryInfo(Path.GetFullPath(dataProtectionKeysPath));
+    keysDirectory.Create();
+    dataProtection.PersistKeysToFileSystem(keysDirectory);
+}
 builder.Services.AddScoped<KnowledgeReader>();
 builder.Services.AddScoped<BookConsistency>();
 builder.Services.AddHttpClient<IBookMetadataProvider, GoogleBooksProvider>(

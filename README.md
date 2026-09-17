@@ -89,6 +89,7 @@ O backend usa a configuração padrão do ASP.NET Core. Valores locais não sens
 | `ConnectionStrings__Default` | `Data Source=mnemora.db` | Conexão SQLite |
 | `Mnemora__WebOrigin` | `http://localhost:3000` | Origem autorizada pelo CORS |
 | `Mnemora__KnownProxies__0` | vazio | IP do proxy reverso confiável que envia `X-Forwarded-For` e `X-Forwarded-Proto` |
+| `Mnemora__DataProtectionKeysPath` | vazio | Diretório persistente para as chaves que protegem cookies e tokens |
 | `ASPNETCORE_URLS` | perfil local em `http://localhost:5100` | URL da API |
 | `ADMIN_EMAIL` | vazio | E-mail do Admin criado durante o seed |
 | `ADMIN_PASSWORD` | vazio | Senha do Admin criado durante o seed |
@@ -170,6 +171,14 @@ npm run dev
 ```
 
 Abra `http://localhost:3000`. Cadastre um leitor pela interface; para acessar `/admin`, use um usuário provisionado pelo seed com as variáveis de Admin.
+
+## Publicar no Render
+
+O repositório inclui um [`render.yaml`](render.yaml) para publicar frontend e API juntos em um único Web Service Docker. O Blueprint usa a região Virginia, o plano `0.5c-512mb`, health check em `/api/health` e um disco persistente de 1 GB para o SQLite e as chaves de sessão.
+
+Abra o fluxo [Deploy to Render](https://render.com/deploy?repo=https://github.com/DiogoJP202/Mnemora), revise o Blueprint e informe `ADMIN_EMAIL` e `ADMIN_PASSWORD` quando solicitado. Esses segredos usam `sync: false` e não ficam no Git. O deploy automático ocorre após os checks do commit passarem.
+
+A configuração custa atualmente **US$ 7,25/mês**: US$ 7,00 pelo serviço e US$ 0,25 pelo disco de 1 GB. Ela opera com uma única instância por causa do SQLite; consulte o [guia de implantação](docs/deployment.md) para o passo a passo, validação, backups e caminho de evolução para múltiplas instâncias.
 
 ## Verificações
 
@@ -258,5 +267,6 @@ As evoluções candidatas estão registradas em [future.md](future.md).
 - [Modelo de domínio](docs/domain-model.md)
 - [Motor antisspoiler](docs/spoiler-system.md)
 - [Guia de desenvolvimento](docs/development.md)
+- [Implantação no Render](docs/deployment.md)
 - [Arquitetura técnica](docs/technical-architecture.md)
 - [Relatório final](docs/final-report.md)

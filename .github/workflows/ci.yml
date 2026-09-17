@@ -69,3 +69,66 @@ jobs:
 
       - name: Audit npm dependencies
         run: npm audit --audit-level=high
+
+  container:
+    name: Container image
+    runs-on: ubuntu-latest
+    needs: [backend, frontend]
+    env:
+      CI_CONTAINER_NAME: mnemora-ci-${{ github.run_id }}-${{ github.run_attempt }}
+      CI_VOLUME_NAME: mnemora-ci-data-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build Docker image
+        run: docker build --tag mnemora:ci .
+
+      - name: Smoke test container
+        env:
+          ADMIN_EMAIL: admin-ci@example.test
+          ADMIN_PASSWORD: Mnemora-CI-Senha-Forte-2026
+        run: |
+          set -euo pipefail
+
+          show_logs() {
+            docker logs "$CI_CONTAINER_NAME" 2>&1 || true
+          }
+          trap show_logs ERR
+
+          docker volume create "$CI_VOLUME_NAME" >/dev/null
+          docker run --detach \
+            --name "$CI_CONTAINER_NAME" \
+            --env ADMIN_EMAIL="$ADMIN_EMAIL" \
+            --env ADMIN_PASSWORD="$ADMIN_PASSWORD" \
+            --mount "type=volume,source=$CI_VOLUME_NAME,target=/var/data" \
+            --publish 127.0.0.1:3000:3000 \
+            mnemora:ci >/dev/null
+
+          for attempt in $(seq 1 60); do
+            status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
+              http://127.0.0.1:3000/api/health || true)"
+
+            if [ "$status" = "200" ]; then
+              echo "Container respondeu /api/health com HTTP 200."
+              exit 0
+            fi
+
+            if [ "$(docker inspect --format '{{.State.Running}}' "$CI_CONTAINER_NAME" 2>/dev/null || true)" != "true" ]; then
+              echo "Container encerrou antes de ficar saudável." >&2
+              show_logs
+              exit 1
+            fi
+
+            sleep 2
+          done
+
+          echo "Container não respondeu /api/health com HTTP 200 dentro do prazo." >&2
+          show_logs
+          exit 1
+
+      - name: Clean up smoke test
+        if: always()
+        run: |
+          docker rm --force "$CI_CONTAINER_NAME" >/dev/null 2>&1 || true
+          docker volume rm "$CI_VOLUME_NAME" >/dev/null 2>&1 || true

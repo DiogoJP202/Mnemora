@@ -16,6 +16,32 @@ namespace Mnemora.Tests;
 public sealed class SecurityEndpointTests
 {
     [Fact]
+    public async Task Data_protection_keys_are_persisted_when_a_path_is_configured()
+    {
+        var keysDirectory = Path.Combine(
+            Path.GetTempPath(), $"mnemora-keys-{Guid.NewGuid():N}");
+
+        try
+        {
+            using var factory = CreateFactory(new Dictionary<string, string?>
+            {
+                ["Mnemora:DataProtectionKeysPath"] = keysDirectory
+            });
+            using var client = factory.CreateClient();
+
+            var response = await client.GetAsync("/api/auth/csrf");
+
+            response.EnsureSuccessStatusCode();
+            Assert.NotEmpty(Directory.EnumerateFiles(keysDirectory, "key-*.xml"));
+        }
+        finally
+        {
+            if (Directory.Exists(keysDirectory))
+                Directory.Delete(keysDirectory, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task Write_without_antiforgery_token_is_rejected_and_not_cached()
     {
         using var factory = CreateFactory();
