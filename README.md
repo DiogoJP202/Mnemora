@@ -174,11 +174,11 @@ Abra `http://localhost:3000`. Cadastre um leitor pela interface; para acessar `/
 
 ## Publicar no Render
 
-O repositório inclui um [`render.yaml`](render.yaml) para publicar frontend e API juntos em um único Web Service Docker. O Blueprint usa a região Virginia, o plano `0.5c-512mb`, health check em `/api/health` e um disco persistente de 1 GB para o SQLite e as chaves de sessão.
+O repositório inclui um [`render.yaml`](render.yaml) para publicar frontend e API juntos em um único Web Service Docker. O Blueprint padrão cria uma **demonstração gratuita**, sem cartão e sem Admin inicial, na região Virginia. O health check usa `/api/health`, e o deploy automático só ocorre depois que os checks do commit passam.
 
-Abra o fluxo [Deploy to Render](https://render.com/deploy?repo=https://github.com/DiogoJP202/Mnemora), revise o Blueprint e informe `ADMIN_EMAIL` e `ADMIN_PASSWORD` quando solicitado. Esses segredos usam `sync: false` e não ficam no Git. O deploy automático ocorre após os checks do commit passarem.
+Abra o fluxo [Deploy to Render](https://render.com/deploy?repo=https://github.com/DiogoJP202/Mnemora), revise o Blueprint e aplique-o. A demonstração permite cadastrar leitores e experimentar o pack original, mas seu SQLite, contas, sessões, progresso e notas são efêmeros. O serviço entra em repouso após 15 minutos sem acessos, pode levar cerca de um minuto para voltar e pode perder todos os dados em repousos, reinícios ou novos deploys. Um aviso visível identifica esse ambiente na interface.
 
-A configuração custa atualmente **US$ 7,25/mês**: US$ 7,00 pelo serviço e US$ 0,25 pelo disco de 1 GB. Ela opera com uma única instância por causa do SQLite; consulte o [guia de implantação](docs/deployment.md) para o passo a passo, validação, backups e caminho de evolução para múltiplas instâncias.
+Para manter dados, contas e sessões entre reinícios, converta depois o serviço para `0.5c-512mb` e anexe um disco de 1 GB. Essa opção custa atualmente cerca de **US$ 7,25/mês**: US$ 7,00 pelo serviço e US$ 0,25 pelo disco. Consulte o [guia de implantação](docs/deployment.md) para o passo a passo, as limitações da demo e a configuração durável.
 
 ## Verificações
 

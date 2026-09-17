@@ -76,18 +76,14 @@ jobs:
     needs: [backend, frontend]
     env:
       CI_CONTAINER_NAME: mnemora-ci-${{ github.run_id }}-${{ github.run_attempt }}
-      CI_VOLUME_NAME: mnemora-ci-data-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Build Docker image
-        run: docker build --tag mnemora:ci .
+        run: docker build --build-arg MNEMORA_DEMO=true --tag mnemora:ci .
 
       - name: Smoke test container
-        env:
-          ADMIN_EMAIL: admin-ci@example.test
-          ADMIN_PASSWORD: Mnemora-CI-Senha-Forte-2026
         run: |
           set -euo pipefail
 
@@ -96,16 +92,15 @@ jobs:
           }
           trap show_logs ERR
 
-          docker volume create "$CI_VOLUME_NAME" >/dev/null
           docker run --detach \
             --name "$CI_CONTAINER_NAME" \
-            --env ADMIN_EMAIL="$ADMIN_EMAIL" \
-            --env ADMIN_PASSWORD="$ADMIN_PASSWORD" \
-            --mount "type=volume,source=$CI_VOLUME_NAME,target=/var/data" \
+            --env 'ConnectionStrings__Default=Data Source=/tmp/mnemora.db' \
+            --env Mnemora__DataProtectionKeysPath=/tmp/mnemora-keys \
+            --env MNEMORA_DEMO=true \
             --publish 127.0.0.1:3000:3000 \
             mnemora:ci >/dev/null
 
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 120); do
             status="$(curl --silent --output /dev/null --write-out '%{http_code}' \
               http://127.0.0.1:3000/api/health || true)"
 
@@ -131,4 +126,3 @@ jobs:
         if: always()
         run: |
           docker rm --force "$CI_CONTAINER_NAME" >/dev/null 2>&1 || true
-          docker volume rm "$CI_VOLUME_NAME" >/dev/null 2>&1 || true

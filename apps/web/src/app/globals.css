@@ -100,6 +100,8 @@
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; background: var(--paper); }
 body { margin: 0; min-width: 320px; background: var(--paper); color: var(--ink); font-family: var(--font-geist), Arial, Helvetica, sans-serif; }
+.deployment-demo-notice { position: relative; z-index: 100; display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 38px; padding: 8px 20px; border-bottom: 1px solid #b99a5e; background: #e8d5a8; color: #252922; text-align: center; font-size: 12px; line-height: 1.4; }
+.deployment-demo-notice strong { text-transform: uppercase; letter-spacing: .08em; }
 button, input, select, textarea { font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .6; }
@@ -231,6 +233,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-soft); opacity: .82
 .lore-card .lore-hint, .timeline-copy .lore-hint { color: var(--olive); }
 
 @media (max-width: 680px) {
+  .deployment-demo-notice { align-items: flex-start; flex-direction: column; gap: 1px; padding-inline: 16px; text-align: left; }
   .landing-nav-actions .theme-toggle { flex: 0 0 44px; }
   .app-topbar-actions { margin-left: auto; }
   .auth-theme { top: 18px; right: 18px; }

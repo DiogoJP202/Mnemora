@@ -2,12 +2,15 @@ FROM node:24.19.0-alpine3.23 AS web-build
 
 WORKDIR /src/apps/web
 
+ARG MNEMORA_DEMO=false
+
 COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci
 
 COPY apps/web/ ./
 ENV NEXT_TELEMETRY_DISABLED=1 \
-    API_BASE_URL=http://127.0.0.1:5100
+    API_BASE_URL=http://127.0.0.1:5100 \
+    MNEMORA_DEMO=$MNEMORA_DEMO
 RUN npm run build
 
 

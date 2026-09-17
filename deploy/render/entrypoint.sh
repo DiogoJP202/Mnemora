@@ -49,8 +49,8 @@ until node -e "fetch('http://127.0.0.1:5100/api/health').then(r=>process.exit(r.
   fi
 
   attempt=$((attempt + 1))
-  if [ "$attempt" -ge 60 ]; then
-    fail "A API não ficou pronta dentro de 60 segundos."
+  if [ "$attempt" -ge 180 ]; then
+    fail "A API não ficou pronta dentro de 180 segundos."
   fi
 
   sleep 1

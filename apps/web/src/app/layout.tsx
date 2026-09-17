@@ -61,11 +61,19 @@ const themeScript = `
 })();`;
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  const isDemo = process.env.MNEMORA_DEMO === "true";
+
   return (
     <html lang="pt-BR" className={geist.variable} data-scroll-behavior="smooth" suppressHydrationWarning>
       <head><script dangerouslySetInnerHTML={{ __html: themeScript }} /></head>
       <body>
         <a className="skip-link" href="#main-content">Pular para o conteúdo</a>
+        {isDemo && (
+          <aside className="deployment-demo-notice" aria-label="Ambiente de demonstração">
+            <strong>Demo gratuita</strong>
+            <span>Contas, progresso e notas podem ser apagados quando o serviço hibernar ou reiniciar.</span>
+          </aside>
+        )}
         {children}
         <PwaRegistration />
       </body>
