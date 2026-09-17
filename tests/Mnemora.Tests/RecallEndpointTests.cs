@@ -24,6 +24,7 @@ public sealed class RecallEndpointTests
             "/api/books/00000000-0000-0000-0000-000000000001/recall?q=Nara");
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
     }
 
     [Fact]

@@ -52,7 +52,7 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
       </nav>
       {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
       {success && <p role="status" className="mt-5 rounded-lg bg-green-50 p-3 text-green-800">{success}</p>}
-      <form onSubmit={save} className="mt-8 grid max-w-2xl gap-4 rounded-2xl border bg-white p-5">
+      <form onSubmit={save} className="mt-8 grid max-w-2xl gap-4 rounded-2xl border bg-[var(--surface)] p-5">
         <h2 className="text-xl font-semibold">Metadados</h2>
         <label className="grid gap-2 text-sm">Título
           <input required value={book.title} onChange={(event) => setBook({ ...book, title: event.target.value })} className="rounded-lg border px-3 py-2" />
@@ -66,11 +66,11 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
         <label className="grid gap-2 text-sm">URL da capa
           <input value={book.coverUrl ?? ""} onChange={(event) => setBook({ ...book, coverUrl: event.target.value })} className="rounded-lg border px-3 py-2" />
         </label>
-        <button className="justify-self-start rounded-lg bg-[#203c35] px-4 py-2 text-white">Salvar</button>
+        <button className="justify-self-start rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)]">Salvar</button>
       </form>
-      <section className="mt-8 max-w-2xl rounded-2xl border bg-white p-5">
+      <section className="mt-8 max-w-2xl rounded-2xl border bg-[var(--surface)] p-5">
         <h2 className="text-xl font-semibold">Preview antisspoiler</h2>
-        <p className="mt-2 text-sm text-[#657066]">Veja o que um leitor no ponto escolhido poderia conhecer.</p>
+        <p className="mt-2 text-sm text-[var(--ink-soft)]">Veja o que um leitor no ponto escolhido poderia conhecer.</p>
         <div className="mt-4 flex flex-wrap gap-3">
           <select aria-label="Unidade para preview" value={previewUnit} onChange={(event) => setPreviewUnit(event.target.value)} className="rounded-lg border px-3 py-2">
             {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.safeLabel} — {unit.title}</option>)}

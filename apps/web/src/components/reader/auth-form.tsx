@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { apiWrite, type AuthUser } from "@/lib/api";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const loginSchema = z.object({
   email: z.email("Informe um e-mail válido."),
@@ -43,15 +44,16 @@ export function AuthForm({ mode }: { mode: "login" | "register" }) {
         <div className="auth-aside-copy"><span className="section-index">UM LUGAR PARA LEMBRAR</span><p>Volte à história com a memória em dia.</p><span>Remember the story. Not the spoilers.</span></div>
         <div className="auth-aside-lines" aria-hidden="true"><i /><i /><i /></div>
       </div>
-      <main className="auth-main">
+      <main id="main-content" className="auth-main">
+        <div className="auth-theme"><ThemeToggle /></div>
         <div className="auth-inner">
           <Link href="/" className="auth-back">← Voltar ao início</Link>
           <span className="section-index">{mode === "login" ? "BEM-VINDO DE VOLTA" : "COMECE A LEMBRAR"}</span>
           <h1>{mode === "login" ? <>Seu lugar na<br /><em>história.</em></> : <>Uma nova forma<br />de <em>lembrar.</em></>}</h1>
           <p className="auth-intro">{mode === "login" ? "Entre para continuar exatamente de onde sua leitura parou." : "Crie sua conta para acompanhar o que você leu, no seu ritmo."}</p>
           <form onSubmit={handleSubmit(submit)} noValidate className="auth-form">
-            <div className="field"><label htmlFor="email">E-mail</label><input id="email" type="email" autoComplete="email" placeholder="voce@exemplo.com" aria-invalid={!!errors.email} {...register("email")} />{errors.email && <span className="field-error">{errors.email.message}</span>}</div>
-            <div className="field"><div className="field-label-row"><label htmlFor="password">Senha</label>{mode === "login" && <Link href="/forgot-password">Esqueceu?</Link>}</div><input id="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder={mode === "login" ? "Sua senha" : "Ao menos 10 caracteres"} aria-invalid={!!errors.password} {...register("password")} />{errors.password && <span className="field-error">{errors.password.message}</span>}</div>
+            <div className="field"><label htmlFor="email">E-mail</label><input id="email" type="email" autoComplete="email" placeholder="voce@exemplo.com" aria-invalid={!!errors.email} aria-describedby={errors.email ? "email-error" : undefined} {...register("email")} />{errors.email && <span id="email-error" className="field-error">{errors.email.message}</span>}</div>
+            <div className="field"><div className="field-label-row"><label htmlFor="password">Senha</label>{mode === "login" && <Link href="/forgot-password">Esqueceu?</Link>}</div><input id="password" type="password" autoComplete={mode === "login" ? "current-password" : "new-password"} placeholder={mode === "login" ? "Sua senha" : "Ao menos 10 caracteres"} aria-invalid={!!errors.password} aria-describedby={errors.password ? "password-error" : undefined} {...register("password")} />{errors.password && <span id="password-error" className="field-error">{errors.password.message}</span>}</div>
             {serverError && <div className="form-alert" role="alert">{serverError}</div>}
             <button className="button button-ink auth-submit" disabled={isSubmitting} type="submit">{isSubmitting ? "Aguarde…" : mode === "login" ? "Entrar" : "Criar minha conta"} <span aria-hidden="true">↗</span></button>
           </form>

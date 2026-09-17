@@ -70,16 +70,16 @@ export function AdminUnits({ bookId }: { bookId: string }) {
     <div>
       <Link href={`/admin/books/${bookId}`} className="text-sm underline">← Livro</Link>
       <h1 className="mt-4 text-4xl font-semibold">Unidades de leitura</h1>
-      <p className="mt-3 max-w-2xl text-[#657066]">A ordem é absoluta por livro. O rótulo público precisa ser seguro mesmo antes de o leitor alcançar a unidade.</p>
+      <p className="mt-3 max-w-2xl text-[var(--ink-soft)]">A ordem é absoluta por livro. O rótulo público precisa ser seguro mesmo antes de o leitor alcançar a unidade.</p>
       {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
       {message && <p role="status" className="mt-5 rounded-lg bg-green-50 p-3 text-green-800">{message}</p>}
       <div className="mt-8 grid gap-6 lg:grid-cols-[1fr_1fr]">
         <div className="grid content-start gap-2">
           {units.map((unit, index) => (
-            <div key={unit.id} className="flex items-center gap-2 rounded-xl border bg-white p-3"
+            <div key={unit.id} className="flex items-center gap-2 rounded-xl border bg-[var(--surface)] p-3"
               style={{ marginLeft: unit.parentUnitId ? 20 : 0 }}>
               <button onClick={() => select(unit)} className="min-w-0 flex-1 text-left">
-                <span className="block text-xs text-[#657066]">{unit.orderIndex} · {unit.type} · {unit.safeLabel}</span>
+                <span className="block text-xs text-[var(--ink-soft)]">{unit.orderIndex} · {unit.type} · {unit.safeLabel}</span>
                 <strong>{unit.title}</strong>
               </button>
               <button aria-label={`Subir ${unit.title}`} disabled={index === 0} onClick={() => move(unit.id, "up")} className="rounded border px-2 py-1 disabled:opacity-30">↑</button>
@@ -88,7 +88,7 @@ export function AdminUnits({ bookId }: { bookId: string }) {
           ))}
           {units.length === 0 && <p>Nenhuma unidade criada.</p>}
         </div>
-        <form onSubmit={save} className="grid content-start gap-4 rounded-2xl border bg-white p-5">
+        <form onSubmit={save} className="grid content-start gap-4 rounded-2xl border bg-[var(--surface)] p-5">
           <h2 className="text-xl font-semibold">{selectedId ? "Editar unidade" : "Nova unidade"}</h2>
           <label className="grid gap-1 text-sm">Título completo
             <input required value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} className="rounded-lg border px-3 py-2" />
@@ -116,7 +116,7 @@ export function AdminUnits({ bookId }: { bookId: string }) {
             </select>
           </label>
           <div className="flex flex-wrap gap-2">
-            <button className="rounded-lg bg-[#203c35] px-4 py-2 text-white">Salvar</button>
+            <button className="rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)]">Salvar</button>
             {selectedId && <button type="button" onClick={remove} className="rounded-lg border border-red-200 px-4 py-2 text-red-700">Excluir</button>}
             {selectedId && <button type="button" onClick={() => { setSelectedId(null); setForm(empty); }} className="rounded-lg border px-4 py-2">Novo</button>}
           </div>

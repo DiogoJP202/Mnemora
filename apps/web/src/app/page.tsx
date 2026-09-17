@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const steps = [
   { number: "01", title: "Escolha seu livro", description: "Comece por uma história da sua biblioteca ou encontre uma nova leitura." },
@@ -14,10 +15,11 @@ export default function Home() {
         <nav aria-label="Navegação principal" className="landing-nav-actions">
           <a href="#como-funciona" className="nav-text-link">Como funciona</a>
           <Link href="/login" className="nav-text-link">Entrar</Link>
+          <ThemeToggle compact />
           <Link href="/register" className="button button-small button-ink">Começar</Link>
         </nav>
       </header>
-      <main>
+      <main id="main-content">
         <section className="hero page-shell">
           <div className="hero-copy">
             <div className="eyebrow"><span className="eyebrow-line" /> SEU COMPANHEIRO DE LEITURA</div>
@@ -29,7 +31,8 @@ export default function Home() {
             </div>
             <p className="hero-note">Remember the story. Not the spoilers.</p>
           </div>
-          <div className="hero-visual" aria-label="Exemplo de busca de memória sem spoilers">
+          <div className="hero-visual" role="img" aria-label="Exemplo de uma busca que mostra somente lembranças já reveladas pela leitura">
+            <div aria-hidden="true" className="hero-visual-content">
             <div className="visual-spine visual-spine-one" /><div className="visual-spine visual-spine-two" />
             <div className="demo-window">
               <div className="demo-toolbar"><span className="demo-dots"><i /><i /><i /></span><span>NO MEIO DA LEITURA</span><span>⌘ K</span></div>
@@ -46,6 +49,7 @@ export default function Home() {
               </div>
             </div>
             <span className="visual-annotation">uma lembrança,<br />não um resumo.</span>
+            </div>
           </div>
         </section>
         <section className="promise-band"><div className="page-shell promise-inner"><span>LEIA NO SEU RITMO</span><span className="promise-divider" /><p>O mundo da história cresce com a sua leitura.</p><span className="promise-star" aria-hidden="true">✳</span></div></section>
@@ -54,7 +58,7 @@ export default function Home() {
           <div className="step-grid">{steps.map((step) => <article className="step-card" key={step.number}><span>{step.number}</span><h3>{step.title}</h3><p>{step.description}</p></article>)}</div>
         </section>
         <section className="section safe-section"><div className="page-shell safe-inner"><div><span className="section-index">02 / SEM SPOILERS</span><h2>O futuro da história<br /><em>fica no futuro.</em></h2><p>Cada informação tem um ponto de revelação. Mnemora conhece seu progresso e mostra apenas o que sua leitura já revelou.</p><Link href="/register" className="text-action">Comece no seu ritmo <span aria-hidden="true">↗</span></Link></div><div className="safe-illustration"><div className="reading-line"><span>CAPÍTULO 01</span><span>CAPÍTULO 02</span><span>CAPÍTULO 03</span><span>···</span></div><div className="reading-track"><i /><i /><i className="current" /><i className="future" /></div><div className="safe-card"><span>VOCÊ ESTÁ AQUI</span><strong>O que já foi lido está ao alcance.</strong><p>O restante espera por você.</p></div></div></div></section>
-        <section className="section page-shell feature-section"><span className="section-index">03 / DENTRO DO LIVRO</span><div className="feature-heading"><h2>Histórias complexas.<br /><em>Lembranças simples.</em></h2><p>Personagens, lugares, relações e acontecimentos organizados como pistas curtas para sua memória.</p></div><div className="feature-grid"><div className="feature-card"><span className="feature-icon">⌕</span><h3>Recall imediato</h3><p>O nome pode escapar. A sensação de reconhecer, não.</p></div><div className="feature-card"><span className="feature-icon">◫</span><h3>Contexto que acompanha</h3><p>Acompanhe o que você já sabe sobre o universo do livro.</p></div><div className="feature-card"><span className="feature-icon">◇</span><h3>Sua leitura, sua medida</h3><p>Atualize o capítulo atual e mantenha a experiência segura.</p></div></div></section>
+        <section className="section page-shell feature-section"><span className="section-index">03 / DENTRO DO LIVRO</span><div className="feature-heading"><h2>Histórias complexas.<br /><em>Lembranças simples.</em></h2><p>Personagens, lugares, relações e acontecimentos organizados como pistas curtas para sua memória.</p></div><div className="feature-grid"><div className="feature-card"><span className="feature-icon" aria-hidden="true">⌕</span><h3>Recall imediato</h3><p>O nome pode escapar. A sensação de reconhecer, não.</p></div><div className="feature-card"><span className="feature-icon" aria-hidden="true">◫</span><h3>Contexto que acompanha</h3><p>Acompanhe o que você já sabe sobre o universo do livro.</p></div><div className="feature-card"><span className="feature-icon" aria-hidden="true">◇</span><h3>Sua leitura, sua medida</h3><p>Atualize o capítulo atual e mantenha a experiência segura.</p></div></div></section>
         <section className="closing-cta"><div className="page-shell"><span className="section-index">VOLTAR PARA A HISTÓRIA</span><h2>Não perca o fio.<br /><em>Continue lendo.</em></h2><Link className="button button-light" href="/register">Criar minha conta <span aria-hidden="true">↗</span></Link></div></section>
       </main>
       <footer className="landing-footer page-shell"><Link href="/" className="wordmark"><span className="brand-mark" aria-hidden="true">m</span>Mnemora</Link><span>Remember the story. Not the spoilers.</span><span>© {new Date().getFullYear()} Mnemora</span></footer>

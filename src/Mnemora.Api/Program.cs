@@ -128,9 +128,6 @@ if (args.Contains("--seed", StringComparer.OrdinalIgnoreCase))
 
 app.UseRouting();
 app.UseCors("web");
-app.UseAuthentication();
-app.UseAuthorization();
-app.UseRateLimiter();
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api"))
@@ -140,6 +137,17 @@ app.Use(async (context, next) =>
             context.Response.Headers.CacheControl = "no-store";
             return Task.CompletedTask;
         });
+    }
+
+    await next();
+});
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseRateLimiter();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api"))
+    {
         if (HttpMethods.IsPost(context.Request.Method)
             || HttpMethods.IsPut(context.Request.Method)
             || HttpMethods.IsPatch(context.Request.Method)

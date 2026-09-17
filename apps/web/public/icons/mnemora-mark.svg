@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Mnemora</title>
+  <desc id="desc">Um livro aberto formando a letra M.</desc>
+  <rect width="512" height="512" rx="108" fill="#252922"/>
+  <path d="M92 145c62-15 115 1 164 47 49-46 102-62 164-47v229c-59-14-112 2-164 45-52-43-105-59-164-45V145Z" fill="#f7f5ef"/>
+  <path d="M256 192v227M121 183c48-5 85 8 112 38v139c-33-24-70-34-112-29V183Zm270 0c-48-5-85 8-112 38v139c33-24 70-34 112-29V183Z" fill="none" stroke="#66715e" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="405" cy="110" r="19" fill="#d2ae67"/>
+</svg>

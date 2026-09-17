@@ -99,7 +99,7 @@ export function ReviewView({ bookId }: { bookId: string }) {
       )}
       {current && (
         <section className="review-session" aria-labelledby="review-entity-name">
-          <div className="review-progress"><span>{index + 1} DE {cards.length}</span><div>{cards.map((card, cardIndex) => <i key={card.id} className={cardIndex <= index ? "active" : ""} />)}</div></div>
+          <div className="review-progress" role="progressbar" aria-label="Progresso da revisão" aria-valuemin={1} aria-valuemax={cards.length} aria-valuenow={index + 1}><span>{index + 1} DE {cards.length}</span><div aria-hidden="true">{cards.map((card, cardIndex) => <i key={card.id} className={cardIndex <= index ? "active" : ""} />)}</div></div>
           <article className="review-card">
             <div className="review-monogram" aria-hidden="true">{current.name.trim().charAt(0).toUpperCase()}</div>
             <span className="section-index">{typeLabel[current.type] ?? current.type}</span>

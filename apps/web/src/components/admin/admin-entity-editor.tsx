@@ -104,7 +104,7 @@ export function AdminEntityEditor({ entityId }: { entityId: string }) {
       <h1 className="mt-4 text-4xl font-semibold">{entity.name}</h1>
       {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
       {message && <p role="status" className="mt-5 rounded-lg bg-green-50 p-3 text-green-800">{message}</p>}
-      <form onSubmit={saveEntity} className="mt-8 grid max-w-2xl gap-4 rounded-2xl border bg-white p-5">
+      <form onSubmit={saveEntity} className="mt-8 grid max-w-2xl gap-4 rounded-2xl border bg-[var(--surface)] p-5">
         <h2 className="text-xl font-semibold">Informações iniciais</h2>
         <label className="grid gap-1 text-sm">Nome
           <input required value={entity.name} onChange={(event) => setEntity({ ...entity, name: event.target.value })} className="rounded-lg border px-3 py-2" />
@@ -137,7 +137,7 @@ export function AdminEntityEditor({ entityId }: { entityId: string }) {
           </label>
         </div>
         <div className="flex gap-3">
-          <button className="rounded-lg bg-[#203c35] px-4 py-2 text-white">Salvar entidade</button>
+          <button className="rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)]">Salvar entidade</button>
           <button type="button" onClick={() => {
             void remove(`/api/admin/entities/${entityId}`, "esta entidade").then((removed) => {
               if (removed) router.push(`/admin/books/${entity.bookId}/entities`);
@@ -146,12 +146,12 @@ export function AdminEntityEditor({ entityId }: { entityId: string }) {
         </div>
       </form>
       <div className="mt-8 grid gap-6 lg:grid-cols-2">
-        <section className="rounded-2xl border bg-white p-5">
+        <section className="rounded-2xl border bg-[var(--surface)] p-5">
           <h2 className="text-xl font-semibold">Aliases</h2>
           <div className="mt-3 grid gap-2">
             {detail.aliases.map((item) => (
               <div key={item.id} className="flex gap-2 rounded-lg border p-3">
-                <button className="flex-1 text-left" onClick={() => setAlias({ ...item, id: item.id })}>{item.alias} <small className="text-[#657066]">· {units.find((unit) => unit.id === item.revealAtUnitId)?.safeLabel}</small></button>
+                <button className="flex-1 text-left" onClick={() => setAlias({ ...item, id: item.id })}>{item.alias} <small className="text-[var(--ink-soft)]">· {units.find((unit) => unit.id === item.revealAtUnitId)?.safeLabel}</small></button>
                 <button onClick={() => remove(`/api/admin/aliases/${item.id}`, "este alias")} className="text-sm text-red-700">Excluir</button>
               </div>
             ))}
@@ -168,14 +168,14 @@ export function AdminEntityEditor({ entityId }: { entityId: string }) {
             <button className="justify-self-start rounded-lg border px-4 py-2">{alias.id ? "Atualizar alias" : "Criar alias"}</button>
           </form>
         </section>
-        <section className="rounded-2xl border bg-white p-5">
+        <section className="rounded-2xl border bg-[var(--surface)] p-5">
           <h2 className="text-xl font-semibold">Fatos e pistas</h2>
           <div className="mt-3 grid gap-2">
             {detail.facts.map((item) => (
               <div key={item.id} className="flex gap-2 rounded-lg border p-3">
                 <button className="flex-1 text-left" onClick={() => setFact({
                   ...item, id: item.id, memoryHint: item.memoryHint ?? "",
-                })}>{item.content} <small className="text-[#657066]">· {units.find((unit) => unit.id === item.revealAtUnitId)?.safeLabel}</small></button>
+                })}>{item.content} <small className="text-[var(--ink-soft)]">· {units.find((unit) => unit.id === item.revealAtUnitId)?.safeLabel}</small></button>
                 <button onClick={() => remove(`/api/admin/facts/${item.id}`, "este fato")} className="text-sm text-red-700">Excluir</button>
               </div>
             ))}
@@ -206,7 +206,7 @@ export function AdminEntityEditor({ entityId }: { entityId: string }) {
           </form>
         </section>
       </div>
-      <section className="mt-8 max-w-2xl rounded-2xl border bg-white p-5">
+      <section className="mt-8 max-w-2xl rounded-2xl border bg-[var(--surface)] p-5">
         <h2 className="text-xl font-semibold">Preview do leitor</h2>
         <div className="mt-4 flex flex-wrap gap-3">
           <select aria-label="Unidade para preview" value={previewUnit} onChange={(event) => setPreviewUnit(event.target.value)} className="rounded-lg border px-3 py-2">

@@ -34,27 +34,27 @@ export function AdminBooks() {
 
   return (
     <div>
-      <p className="text-sm uppercase tracking-[.16em] text-[#657066]">Catálogo</p>
+      <p className="text-sm uppercase tracking-[.16em] text-[var(--ink-soft)]">Catálogo</p>
       <h1 className="mt-2 text-4xl font-semibold">Livros</h1>
       {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
-      <form onSubmit={create} className="mt-8 grid gap-3 rounded-2xl border border-[#d9ddd6] bg-white p-5 sm:grid-cols-[1fr_1fr_auto]">
+      <form onSubmit={create} className="mt-8 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 sm:grid-cols-[1fr_1fr_auto]">
         <label className="grid gap-2 text-sm">Título
-          <input required value={title} onChange={(event) => setTitle(event.target.value)} className="rounded-lg border border-[#cbd1c9] px-3 py-2" />
+          <input required value={title} onChange={(event) => setTitle(event.target.value)} className="rounded-lg border border-[var(--line)] px-3 py-2" />
         </label>
         <label className="grid gap-2 text-sm">Autor
-          <input required value={author} onChange={(event) => setAuthor(event.target.value)} className="rounded-lg border border-[#cbd1c9] px-3 py-2" />
+          <input required value={author} onChange={(event) => setAuthor(event.target.value)} className="rounded-lg border border-[var(--line)] px-3 py-2" />
         </label>
-        <button disabled={saving} className="self-end rounded-lg bg-[#203c35] px-4 py-2.5 text-white disabled:opacity-50">Criar livro</button>
+        <button disabled={saving} className="self-end rounded-lg bg-[var(--action-surface)] px-4 py-2.5 text-[var(--action-text)] disabled:opacity-50">Criar livro</button>
       </form>
       <div className="mt-8 grid gap-3">
         {books.map((book) => (
           <Link key={book.id} href={`/admin/books/${book.id}`}
-            className="rounded-xl border border-[#d9ddd6] bg-white p-5 hover:border-[#748d79]">
+            className="rounded-xl border border-[var(--line)] bg-[var(--surface)] p-5 hover:border-[var(--olive)]">
             <strong className="block text-lg">{book.title}</strong>
-            <span className="text-sm text-[#657066]">{book.author}</span>
+            <span className="text-sm text-[var(--ink-soft)]">{book.author}</span>
           </Link>
         ))}
-        {books.length === 0 && <p className="text-[#657066]">Nenhum livro no catálogo.</p>}
+        {books.length === 0 && <p className="text-[var(--ink-soft)]">Nenhum livro no catálogo.</p>}
       </div>
     </div>
   );

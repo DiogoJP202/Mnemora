@@ -85,7 +85,7 @@ export function AdminEntities({ bookId }: { bookId: string }) {
     <div>
       <Link href={`/admin/books/${bookId}`} className="text-sm underline">← Livro</Link>
       <h1 className="mt-4 text-4xl font-semibold">Entidades e relações</h1>
-      <p className="mt-3 max-w-2xl text-[#657066]">O resumo inicial deve ser seguro no primeiro ponto de conhecimento. Informações posteriores devem ser fatos separados.</p>
+      <p className="mt-3 max-w-2xl text-[var(--ink-soft)]">O resumo inicial deve ser seguro no primeiro ponto de conhecimento. Informações posteriores devem ser fatos separados.</p>
       {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
       {message && <p role="status" className="mt-5 rounded-lg bg-green-50 p-3 text-green-800">{message}</p>}
       {units.length === 0 && <p className="mt-6 rounded-xl bg-amber-50 p-4">Crie unidades de leitura antes de cadastrar lore.</p>}
@@ -95,15 +95,15 @@ export function AdminEntities({ bookId }: { bookId: string }) {
           <div className="mt-4 grid gap-2">
             {entities.map((entity) => (
               <Link key={entity.id} href={`/admin/entities/${entity.id}`}
-                className="rounded-xl border bg-white p-4 hover:border-[#748d79]">
+                className="rounded-xl border bg-[var(--surface)] p-4 hover:border-[var(--olive)]">
                 <strong className="block">{entity.name}</strong>
-                <span className="text-xs text-[#657066]">{entity.type} · {units.find((unit) => unit.id === entity.firstKnownAtUnitId)?.safeLabel}</span>
+                <span className="text-xs text-[var(--ink-soft)]">{entity.type} · {units.find((unit) => unit.id === entity.firstKnownAtUnitId)?.safeLabel}</span>
               </Link>
             ))}
             {entities.length === 0 && <p>Nenhuma entidade criada.</p>}
           </div>
         </section>
-        <form onSubmit={createEntity} className="grid content-start gap-4 rounded-2xl border bg-white p-5">
+        <form onSubmit={createEntity} className="grid content-start gap-4 rounded-2xl border bg-[var(--surface)] p-5">
           <h2 className="text-xl font-semibold">Nova entidade</h2>
           <label className="grid gap-1 text-sm">Nome
             <input required value={name} onChange={(event) => {
@@ -127,7 +127,7 @@ export function AdminEntities({ bookId }: { bookId: string }) {
               {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.safeLabel} — {unit.title}</option>)}
             </select>
           </label>
-          <button disabled={!firstUnit} className="justify-self-start rounded-lg bg-[#203c35] px-4 py-2 text-white">Criar entidade</button>
+          <button disabled={!firstUnit} className="justify-self-start rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)]">Criar entidade</button>
         </form>
       </div>
       <section className="mt-10 grid gap-6 lg:grid-cols-2">
@@ -135,15 +135,15 @@ export function AdminEntities({ bookId }: { bookId: string }) {
           <h2 className="text-2xl font-semibold">Relações</h2>
           <div className="mt-4 grid gap-2">
             {relations.map((relation) => (
-              <div key={relation.id} className="flex items-center gap-3 rounded-xl border bg-white p-4">
-                <span className="flex-1">{names.get(relation.sourceEntityId)} → {names.get(relation.targetEntityId)} <small className="text-[#657066]">({relation.label || relation.relationType})</small></span>
+              <div key={relation.id} className="flex items-center gap-3 rounded-xl border bg-[var(--surface)] p-4">
+                <span className="flex-1">{names.get(relation.sourceEntityId)} → {names.get(relation.targetEntityId)} <small className="text-[var(--ink-soft)]">({relation.label || relation.relationType})</small></span>
                 <button onClick={() => removeRelation(relation.id)} className="text-sm text-red-700">Excluir</button>
               </div>
             ))}
             {relations.length === 0 && <p>Nenhuma relação criada.</p>}
           </div>
         </div>
-        <form onSubmit={createRelation} className="grid content-start gap-4 rounded-2xl border bg-white p-5">
+        <form onSubmit={createRelation} className="grid content-start gap-4 rounded-2xl border bg-[var(--surface)] p-5">
           <h2 className="text-xl font-semibold">Nova relação</h2>
           <label className="grid gap-1 text-sm">Origem
             <select required value={sourceId} onChange={(event) => setSourceId(event.target.value)} className="rounded-lg border px-3 py-2">
@@ -166,7 +166,7 @@ export function AdminEntities({ bookId }: { bookId: string }) {
               {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.safeLabel}</option>)}
             </select>
           </label>
-          <button disabled={!sourceId || !targetId || !revealUnit} className="justify-self-start rounded-lg bg-[#203c35] px-4 py-2 text-white">Criar relação</button>
+          <button disabled={!sourceId || !targetId || !revealUnit} className="justify-self-start rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)]">Criar relação</button>
         </form>
       </section>
     </div>
