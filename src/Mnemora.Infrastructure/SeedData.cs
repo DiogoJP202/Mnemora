@@ -21,7 +21,9 @@ public static class SeedData
         if (!string.IsNullOrWhiteSpace(adminEmail) && !string.IsNullOrWhiteSpace(adminPassword))
         {
             if (!await roles.RoleExistsAsync("Admin"))
-                await roles.CreateAsync(new IdentityRole<Guid>("Admin"));
+                EnsureSucceeded(
+                    await roles.CreateAsync(new IdentityRole<Guid>("Admin")),
+                    "criar a role Admin");
             var admin = await users.FindByEmailAsync(adminEmail);
             if (admin is null)
             {
@@ -31,8 +33,16 @@ public static class SeedData
                     throw new InvalidOperationException(
                         "Não foi possível criar o Admin. Verifique ADMIN_EMAIL e ADMIN_PASSWORD.");
             }
+            else if (!await users.IsInRoleAsync(admin, "Admin")
+                     && !await users.CheckPasswordAsync(admin, adminPassword))
+            {
+                throw new InvalidOperationException(
+                    "ADMIN_EMAIL já pertence a uma conta sem a role Admin e a senha configurada não corresponde.");
+            }
+
             if (!await users.IsInRoleAsync(admin, "Admin"))
-                await users.AddToRoleAsync(admin, "Admin");
+                EnsureSucceeded(await users.AddToRoleAsync(admin, "Admin"),
+                    "atribuir a role Admin");
         }
         else
         {
@@ -118,6 +128,14 @@ public static class SeedData
         await db.SaveChangesAsync();
         await transaction.CommitAsync();
         logger.LogInformation("Pack demonstrativo original criado: {BookId}", book.Id);
+    }
+
+    private static void EnsureSucceeded(IdentityResult result, string operation)
+    {
+        if (result.Succeeded) return;
+        var errors = string.Join("; ", result.Errors.Select(error => error.Code));
+        throw new InvalidOperationException(
+            $"Não foi possível {operation}. Erros do Identity: {errors}.");
     }
 
     private static ReadingUnit Unit(Guid bookId, int order, string title, string safeLabel,

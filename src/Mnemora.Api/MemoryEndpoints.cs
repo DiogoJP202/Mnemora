@@ -8,6 +8,11 @@ namespace Mnemora.Api;
 
 public static class MemoryEndpoints
 {
+    private const int MaxNotesPerBook = 200;
+    private const int MaxReviewActivitiesPerBook = 500;
+    private static readonly SemaphoreSlim NoteCreateGate = new(1, 1);
+    private static readonly SemaphoreSlim ReviewWriteGate = new(1, 1);
+
     public static IEndpointRouteBuilder MapMemoryEndpoints(this IEndpointRouteBuilder app)
     {
         var memory = app.MapGroup("/api").RequireAuthorization().WithTags("Memory");
@@ -39,19 +44,32 @@ public static class MemoryEndpoints
             if (!await ReferencesAreKnown(db, reader, scope,
                     request.EntityId, request.ReadingUnitId))
                 return InvalidRequest("Referência de nota inválida para seu ponto de leitura.");
-
-            var note = new UserNote
+            await NoteCreateGate.WaitAsync();
+            try
             {
-                UserId = scope.UserId,
-                BookId = bookId,
-                EntityId = request.EntityId,
-                ReadingUnitId = request.ReadingUnitId,
-                Content = content
-            };
-            db.UserNotes.Add(note);
-            await db.SaveChangesAsync();
-            return Results.Created($"/api/notes/{note.Id}", NoteDto.From(note));
-        });
+                if (await db.UserNotes.CountAsync(x =>
+                        x.UserId == scope.UserId && x.BookId == bookId) >= MaxNotesPerBook)
+                    return Results.Problem(
+                        $"O limite de {MaxNotesPerBook} notas por livro foi atingido.",
+                        statusCode: StatusCodes.Status409Conflict);
+
+                var note = new UserNote
+                {
+                    UserId = scope.UserId,
+                    BookId = bookId,
+                    EntityId = request.EntityId,
+                    ReadingUnitId = request.ReadingUnitId,
+                    Content = content
+                };
+                db.UserNotes.Add(note);
+                await db.SaveChangesAsync();
+                return Results.Created($"/api/notes/{note.Id}", NoteDto.From(note));
+            }
+            finally
+            {
+                NoteCreateGate.Release();
+            }
+        }).RequireRateLimiting("memory-write");
 
         memory.MapPut("/notes/{noteId:guid}", async (
             Guid noteId, NoteUpdate request, ClaimsPrincipal user,
@@ -73,7 +91,7 @@ public static class MemoryEndpoints
             note.UpdatedAt = DateTime.UtcNow;
             await db.SaveChangesAsync();
             return Results.Ok(NoteDto.From(note));
-        });
+        }).RequireRateLimiting("memory-write");
 
         memory.MapDelete("/notes/{noteId:guid}", async (
             Guid noteId, ClaimsPrincipal user, MnemoraDbContext db, KnowledgeReader reader) =>
@@ -91,7 +109,7 @@ public static class MemoryEndpoints
             db.UserNotes.Remove(note);
             await db.SaveChangesAsync();
             return Results.NoContent();
-        });
+        }).RequireRateLimiting("memory-write");
 
         memory.MapGet("/books/{bookId:guid}/review", async (
             Guid bookId, ClaimsPrincipal user, KnowledgeReader reader) =>
@@ -112,17 +130,33 @@ public static class MemoryEndpoints
             if (!await reader.KnownEntities(scope).AnyAsync(x => x.Id == entityId))
                 return Results.NotFound();
 
-            db.UserRecallActivities.Add(new UserRecallActivity
+            await ReviewWriteGate.WaitAsync();
+            try
             {
-                UserId = scope.UserId,
-                BookId = bookId,
-                EntityId = entityId,
-                Remembered = remembered,
-                At = DateTime.UtcNow
-            });
-            await db.SaveChangesAsync();
-            return Results.NoContent();
-        });
+                var staleActivities = await db.UserRecallActivities
+                    .Where(x => x.UserId == scope.UserId && x.BookId == bookId)
+                    .OrderByDescending(x => x.At)
+                    .ThenByDescending(x => x.Id)
+                    .Skip(MaxReviewActivitiesPerBook - 1)
+                    .ToListAsync();
+                db.UserRecallActivities.RemoveRange(staleActivities);
+
+                db.UserRecallActivities.Add(new UserRecallActivity
+                {
+                    UserId = scope.UserId,
+                    BookId = bookId,
+                    EntityId = entityId,
+                    Remembered = remembered,
+                    At = DateTime.UtcNow
+                });
+                await db.SaveChangesAsync();
+                return Results.NoContent();
+            }
+            finally
+            {
+                ReviewWriteGate.Release();
+            }
+        }).RequireRateLimiting("memory-write");
 
         return app;
     }

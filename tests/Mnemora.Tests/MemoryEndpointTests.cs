@@ -136,6 +136,73 @@ public sealed class MemoryEndpointTests
     }
 
     [Fact]
+    public async Task Memory_storage_limits_notes_and_prunes_review_history()
+    {
+        using var factory = CreateFactory("limits");
+        using var reader = Client(factory);
+        using var noProgressReader = Client(factory);
+        var readerId = await Register(reader);
+        var noProgressId = await Register(noProgressReader);
+        var story = await SeedReviewStory(factory, readerId, noProgressId);
+        Guid[] oldestActivityIds;
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            db.UserNotes.AddRange(Enumerable.Range(1, 199).Select(index => new UserNote
+            {
+                UserId = readerId,
+                BookId = story.BookId,
+                Content = $"Nota {index}"
+            }));
+
+            var historyStart = DateTime.UtcNow.AddHours(-1);
+            var activities = Enumerable.Range(0, 500).Select(index =>
+                new UserRecallActivity
+                {
+                    UserId = readerId,
+                    BookId = story.BookId,
+                    EntityId = story.KnownEntityIds[0],
+                    Remembered = index % 2 == 0,
+                    At = historyStart.AddSeconds(index)
+                }).ToArray();
+            oldestActivityIds = activities[..2].Select(x => x.Id).ToArray();
+            db.UserRecallActivities.AddRange(activities);
+            await db.SaveChangesAsync();
+        }
+
+        var noteWrites = await Task.WhenAll(
+            Write(reader, HttpMethod.Post, $"/api/books/{story.BookId}/notes",
+                new { content = "Nota concorrente A" }),
+            Write(reader, HttpMethod.Post, $"/api/books/{story.BookId}/notes",
+                new { content = "Nota concorrente B" }));
+        Assert.Equal(
+            [HttpStatusCode.Created, HttpStatusCode.Conflict],
+            noteWrites.Select(x => x.StatusCode).Order().ToArray());
+
+        var reviewWrites = await Task.WhenAll(
+            Write(reader, HttpMethod.Post,
+                $"/api/books/{story.BookId}/review/{story.KnownEntityIds[0]}",
+                new { remembered = true }),
+            Write(reader, HttpMethod.Post,
+                $"/api/books/{story.BookId}/review/{story.KnownEntityIds[0]}",
+                new { remembered = false }));
+        Assert.All(reviewWrites,
+            response => Assert.Equal(HttpStatusCode.NoContent, response.StatusCode));
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            Assert.Equal(200, await db.UserNotes.CountAsync(x =>
+                x.UserId == readerId && x.BookId == story.BookId));
+            Assert.Equal(500, await db.UserRecallActivities.CountAsync(x =>
+                x.UserId == readerId && x.BookId == story.BookId));
+            Assert.False(await db.UserRecallActivities.AnyAsync(x =>
+                oldestActivityIds.Contains(x.Id)));
+        }
+    }
+
+    [Fact]
     public async Task Memory_endpoints_require_authentication_and_library_ownership()
     {
         using var factory = CreateFactory("access");
