@@ -12,13 +12,16 @@ public static class AdminBookEndpoints
         var admin = app.MapGroup("/api/admin").RequireAuthorization("Admin").WithTags("Admin Books");
 
         admin.MapGet("/books", async (MnemoraDbContext db) =>
-            Results.Ok(await db.Books.AsNoTracking().OrderBy(x => x.Title)
+            Results.Ok(await db.Books.AsNoTracking()
+                .Where(x => x.CatalogKind != BookCatalogKind.Private)
+                .OrderBy(x => x.Title)
                 .Select(x => new BookDto(x.Id, x.Title, x.Author, x.Description, x.CoverUrl))
                 .ToListAsync()));
 
         admin.MapGet("/books/{bookId:guid}", async (Guid bookId, MnemoraDbContext db) =>
         {
-            var book = await db.Books.AsNoTracking().FirstOrDefaultAsync(x => x.Id == bookId);
+            var book = await db.Books.AsNoTracking().FirstOrDefaultAsync(x =>
+                x.Id == bookId && x.CatalogKind != BookCatalogKind.Private);
             return book is null ? Results.NotFound() : Results.Ok(
                 new BookDto(book.Id, book.Title, book.Author, book.Description, book.CoverUrl));
         });
@@ -41,7 +44,8 @@ public static class AdminBookEndpoints
         admin.MapPut("/books/{bookId:guid}", async (
             Guid bookId, BookWrite request, MnemoraDbContext db) =>
         {
-            var book = await db.Books.FindAsync(bookId);
+            var book = await db.Books.FirstOrDefaultAsync(x =>
+                x.Id == bookId && x.CatalogKind != BookCatalogKind.Private);
             if (book is null) return Results.NotFound();
             if (string.IsNullOrWhiteSpace(request.Title) || string.IsNullOrWhiteSpace(request.Author))
                 return Results.BadRequest("Título e autor são obrigatórios.");
@@ -57,7 +61,8 @@ public static class AdminBookEndpoints
 
         admin.MapDelete("/books/{bookId:guid}", async (Guid bookId, MnemoraDbContext db) =>
         {
-            var book = await db.Books.FindAsync(bookId);
+            var book = await db.Books.FirstOrDefaultAsync(x =>
+                x.Id == bookId && x.CatalogKind != BookCatalogKind.Private);
             if (book is null) return Results.NotFound();
             if (await db.ReadingUnits.AnyAsync(x => x.BookId == bookId)
                 || await db.LoreEntities.AnyAsync(x => x.BookId == bookId)
@@ -70,16 +75,23 @@ public static class AdminBookEndpoints
 
         admin.MapGet("/books/{bookId:guid}/reading-units", async (
             Guid bookId, MnemoraDbContext db) =>
-            Results.Ok(await db.ReadingUnits.AsNoTracking().Where(x => x.BookId == bookId)
+        {
+            if (!await db.Books.AnyAsync(x =>
+                    x.Id == bookId && x.CatalogKind != BookCatalogKind.Private))
+                return Results.NotFound();
+            return Results.Ok(await db.ReadingUnits.AsNoTracking().Where(x => x.BookId == bookId)
                 .OrderBy(x => x.OrderIndex)
                 .Select(x => new UnitDto(x.Id, x.BookId, x.ParentUnitId, x.Title,
                     x.SafeLabel, x.Slug, x.Type.ToString(), x.OrderIndex))
-                .ToListAsync()));
+                .ToListAsync());
+        });
 
         admin.MapPost("/books/{bookId:guid}/reading-units", async (
             Guid bookId, UnitWrite request, MnemoraDbContext db) =>
         {
-            if (!await db.Books.AnyAsync(x => x.Id == bookId)) return Results.NotFound();
+            if (!await db.Books.AnyAsync(x =>
+                    x.Id == bookId && x.CatalogKind != BookCatalogKind.Private))
+                return Results.NotFound();
             var validation = await ValidateUnitAsync(db, bookId, null, request);
             if (validation is not null) return validation;
             var unit = ToUnit(bookId, request);

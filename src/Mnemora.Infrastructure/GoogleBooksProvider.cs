@@ -6,9 +6,10 @@ using Mnemora.Application;
 namespace Mnemora.Infrastructure;
 
 public sealed class GoogleBooksProvider(
-    HttpClient client, IConfiguration configuration) : IBookMetadataProvider
+    HttpClient client, IConfiguration configuration) : IBookMetadataSource
 {
     private readonly string? key = configuration["GOOGLE_BOOKS_API_KEY"];
+    public string Provider => BookMetadataProviders.GoogleBooks;
     public bool IsConfigured => !string.IsNullOrWhiteSpace(key);
 
     public async Task<IReadOnlyList<ExternalBookMetadata>> SearchAsync(
@@ -36,7 +37,8 @@ public sealed class GoogleBooksProvider(
         using var response = await client.GetAsync(
             $"https://www.googleapis.com/books/v1/volumes/{Uri.EscapeDataString(externalId)}?key={Uri.EscapeDataString(key!)}",
             cancellationToken);
-        if (!response.IsSuccessStatusCode) return null;
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound) return null;
+        response.EnsureSuccessStatusCode();
         using var document = await response.Content.ReadFromJsonAsync<JsonDocument>(
             cancellationToken: cancellationToken);
         return document is null ? null : Parse(document.RootElement);
@@ -73,6 +75,7 @@ public sealed class GoogleBooksProvider(
             && DateOnly.TryParse(date.GetString(), out var parsed))
             publishedDate = parsed;
         return new ExternalBookMetadata(
+            BookMetadataProviders.GoogleBooks,
             id.GetString() ?? "", title.GetString() ?? "", author, cover,
             isbn10, isbn13,
             info.TryGetProperty("publisher", out var publisher) ? publisher.GetString() : null,

@@ -2,7 +2,7 @@
 
 > **Remember the story. Not the spoilers.**
 
-Mnemora é um companion de leitura mobile-first para recordar personagens, lugares, facções, relações e acontecimentos sem ultrapassar o ponto atual do leitor. A aplicação também oferece biblioteca pessoal, progresso por unidade de leitura, notas privadas, revisão curta de entidades conhecidas, catálogo e uma área administrativa para criar packs de lore.
+Mnemora é um companion de leitura mobile-first para recordar personagens, lugares, facções, relações e acontecimentos sem ultrapassar o ponto atual do leitor. A aplicação também oferece biblioteca pessoal, busca de livros por título, autor ou ISBN, cadastro manual, progresso por unidade de leitura, notas privadas, revisão curta de entidades conhecidas, catálogo e uma área administrativa para criar packs de lore.
 
 O projeto é uma PWA em português (`pt-BR`) e usa um universo fictício original no conteúdo demonstrativo.
 
@@ -93,7 +93,8 @@ O backend usa a configuração padrão do ASP.NET Core. Valores locais não sens
 | `ASPNETCORE_URLS` | perfil local em `http://localhost:5100` | URL da API |
 | `ADMIN_EMAIL` | vazio | E-mail do Admin criado durante o seed |
 | `ADMIN_PASSWORD` | vazio | Senha do Admin criado durante o seed |
-| `GOOGLE_BOOKS_API_KEY` | vazio | Habilita busca e importação pelo Google Books |
+| `GOOGLE_BOOKS_API_KEY` | vazio | Acrescenta Google Books à busca e importação externas |
+| `OPEN_LIBRARY_CONTACT` | URL do repositório | E-mail ou URL de contato enviado no `User-Agent` das consultas à Open Library |
 
 As duas primeiras opções correspondem às chaves `ConnectionStrings:Default` e `Mnemora:WebOrigin` em `appsettings`. Um exemplo sem segredos é:
 
@@ -222,7 +223,7 @@ apps/web/                    Next.js App Router, interface e PWA
 src/Mnemora.Api/             HTTP, auth, autorização e endpoints REST
 src/Mnemora.Application/     política de visibilidade, DTOs e contratos
 src/Mnemora.Domain/          entidades e enums do domínio
-src/Mnemora.Infrastructure/  EF Core, Identity, consultas, seed e Google Books
+src/Mnemora.Infrastructure/  EF Core, Identity, consultas, seed e providers de livros
 tests/Mnemora.Tests/         testes unitários e de integração da API
 tests/pwa/                   testes do manifesto, ícones e service worker
 docs/                        arquitetura, domínio, desenvolvimento e antisspoiler
@@ -237,7 +238,7 @@ Todos os endpoints vivem sob `/api`. Rotas de escrita exigem `X-CSRF-TOKEN`; as 
 | Saúde | `GET /api/health` |
 | Autenticação | `GET /api/auth/csrf`, `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
 | Catálogo | `GET /api/books`, `GET /api/books/search?q=...`, `GET /api/books/{bookId}` |
-| Biblioteca | `GET /api/library`, `POST/DELETE /api/library/{bookId}`, `POST /api/library/external`, `PATCH /api/library/{bookId}/progress`, `PATCH /api/library/{bookId}/status` |
+| Biblioteca | `GET /api/library`, `POST/DELETE /api/library/{bookId}`, `POST /api/library/external`, `POST /api/library/manual`, `PATCH /api/library/{bookId}/progress`, `PATCH /api/library/{bookId}/status` |
 | Livro autenticado | `GET /api/books/{bookId}/reading-units`, `GET /api/books/{bookId}/overview` |
 | Lore seguro | `GET /api/books/{bookId}/entities`, `/factions`, `/locations`, `/timeline`, `GET /api/entities/{entityId}` |
 | Recall | `GET /api/books/{bookId}/recall?q=...` |
@@ -245,12 +246,16 @@ Todos os endpoints vivem sob `/api`. Rotas de escrita exigem `X-CSRF-TOKEN`; as 
 | Revisão | `GET /api/books/{bookId}/review`, `POST /api/books/{bookId}/review/{entityId}` |
 | Administração | `/api/admin/books`, `/api/admin/books/{bookId}/reading-units`, `/api/admin/books/{bookId}/entities`, `/api/admin/entities/{entityId}`, aliases, fatos, relações e previews seguros |
 
-A busca externa requer `GOOGLE_BOOKS_API_KEY`. A importação é idempotente pelo identificador do Google Books e descarta descrições externas, pois elas podem conter spoilers.
+A busca externa usa a Open Library por padrão e não exige chave. `GOOGLE_BOOKS_API_KEY` habilita o Google Books como fonte adicional; falha em um provider não descarta resultados válidos do outro. Para importar o resultado escolhido, envie `{ "externalProvider": "OpenLibrary", "externalId": "OL...W" }` a `POST /api/library/external`. O par provider/identificador torna a importação idempotente e permite que outros leitores reutilizem o mesmo registro bibliográfico. Descrições externas nunca são importadas, pois podem conter spoilers.
+
+Quando a busca não encontra o livro, `POST /api/library/manual` aceita `{ "title": "...", "author": "...", "isbn": "..." }`. Apenas `title` é obrigatório; autor e ISBN são opcionais, e o ISBN, quando presente, deve ser válido. O livro manual pertence ao leitor que o criou e não aparece para outras contas.
+
+Cada DTO de livro informa `memoryPackAvailable`. Um livro sem pack continua permitindo status de leitura, página de referência e notas privadas. Personagens, lugares, timeline, Recall e revisão só ficam disponíveis quando houver unidades e lore curados; metadados importados ou manuais nunca são convertidos automaticamente em memória da história.
 
 ## Limitações do MVP
 
 - recuperação de senha ainda apresenta apenas uma orientação na interface;
-- livros importados recebem metadados bibliográficos, mas não ganham um pack de lore automaticamente;
+- livros importados ou cadastrados manualmente permitem organizar status, página e notas, mas não ganham um pack de lore automaticamente;
 - a busca é textual; busca semântica e recursos de IA não fazem parte desta versão;
 - a revisão registra “Eu lembro” ou “Preciso revisar”, sem agendamento por repetição espaçada;
 - SQLite atende ao uso local e a uma implantação simples, sem a estratégia operacional de um banco multi-instância;

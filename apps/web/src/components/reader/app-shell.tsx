@@ -43,7 +43,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <p className="sidebar-label">SEU ESPAÇO DE LEITURA</p>
         <nav aria-label="Aplicativo" className="sidebar-links">
           <Link href="/app/library" aria-current={isLibrary ? "page" : undefined}><span aria-hidden="true">◫</span> Biblioteca</Link>
-          <Link href="/app/search" aria-current={isSearch ? "page" : undefined}><span aria-hidden="true">⌕</span> Encontrar livros</Link>
+          <Link href="/app/search" aria-current={isSearch ? "page" : undefined}><span aria-hidden="true">＋</span> Adicionar livro</Link>
           {user.isAdmin && <Link href="/admin"><span aria-hidden="true">⚙</span> Administração</Link>}
         </nav>
         <div className="sidebar-bottom"><span className="sidebar-quote">“Um livro é uma memória que você ainda não viveu.”</span><span className="sidebar-email" title={user.email}>{user.email}</span><button onClick={logout} disabled={loggingOut} type="button">Sair da conta <span aria-hidden="true">↗</span></button></div>
@@ -54,7 +54,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </div>
       <nav className="mobile-nav" aria-label="Navegação do aplicativo">
         <Link href="/app/library" aria-current={isLibrary ? "page" : undefined}><span aria-hidden="true">◫</span>Biblioteca</Link>
-        <Link href="/app/search" aria-current={isSearch ? "page" : undefined}><span aria-hidden="true">⌕</span>Encontrar</Link>
+        <Link href="/app/search" aria-current={isSearch ? "page" : undefined}><span aria-hidden="true">＋</span>Adicionar</Link>
         {user.isAdmin && <Link href="/admin"><span aria-hidden="true">⚙</span>Admin</Link>}
         <button onClick={logout} disabled={loggingOut} type="button"><span aria-hidden="true">↗</span>{loggingOut ? "Saindo" : "Sair"}</button>
       </nav>

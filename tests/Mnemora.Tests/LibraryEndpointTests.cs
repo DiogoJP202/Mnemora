@@ -37,10 +37,10 @@ public sealed class LibraryEndpointTests
         var search = await client.GetStringAsync("/api/books/search?q=externo");
         Assert.Contains("external", search);
         var first = await Write(client, HttpMethod.Post, "/api/library/external",
-            new { externalId = "external-demo-1" });
+            new { externalProvider = FakeProvider.Provider, externalId = "external-demo-1" });
         Assert.Equal(HttpStatusCode.OK, first.StatusCode);
         var second = await Write(client, HttpMethod.Post, "/api/library/external",
-            new { externalId = "external-demo-1" });
+            new { externalProvider = FakeProvider.Provider, externalId = "external-demo-1" });
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
         var firstBook = (await first.Content.ReadFromJsonAsync<JsonElement>())
             .GetProperty("book");
@@ -53,6 +53,189 @@ public sealed class LibraryEndpointTests
         var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
         Assert.Equal(1, await db.Books.CountAsync());
         Assert.Equal(1, await db.UserBooks.CountAsync());
+        var imported = await db.Books.SingleAsync();
+        Assert.Equal(BookCatalogKind.Imported, imported.CatalogKind);
+        Assert.Equal(FakeProvider.Provider, imported.ExternalProvider);
+        Assert.Null(imported.OwnerUserId);
+    }
+
+    [Fact]
+    public async Task Manual_book_requires_authentication_and_rejects_invalid_fields()
+    {
+        using var factory = CreateFactory("manual-validation", new DisabledProvider());
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+
+        var anonymous = await Write(client, HttpMethod.Post, "/api/library/manual",
+            new { title = "Livro particular", author = "Autora", isbn = (string?)null });
+        Assert.Equal(HttpStatusCode.Unauthorized, anonymous.StatusCode);
+
+        await Register(client);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Write(client, HttpMethod.Post, "/api/library/manual",
+                new { title = "   ", author = "Autora", isbn = (string?)null })).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Write(client, HttpMethod.Post, "/api/library/manual",
+                new { title = "Livro", author = new string('a', 301), isbn = (string?)null }))
+            .StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await Write(client, HttpMethod.Post, "/api/library/manual",
+                new { title = "Livro", author = "Autora", isbn = "1234567890" }))
+            .StatusCode);
+
+        var valid = await Write(client, HttpMethod.Post, "/api/library/manual",
+            new { title = "Livro sem autoria", author = (string?)null, isbn = (string?)null });
+        Assert.Equal(HttpStatusCode.OK, valid.StatusCode);
+        var body = await valid.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Autor não informado",
+            body.GetProperty("book").GetProperty("author").GetString());
+        Assert.False(body.GetProperty("book").GetProperty("memoryPackAvailable").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Manual_book_is_private_and_equivalent_isbn_reuses_the_owned_book()
+    {
+        using var factory = CreateFactory("manual-privacy", new DisabledProvider());
+        using var owner = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var anotherReader = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var anonymous = factory.CreateClient();
+        await Register(owner);
+        await Register(anotherReader);
+
+        var first = await Write(owner, HttpMethod.Post, "/api/library/manual", new
+        {
+            title = "  Livro   particular ", author = " Autora ", isbn = (string?)null
+        });
+        var second = await Write(owner, HttpMethod.Post, "/api/library/manual", new
+        {
+            title = "Livro particular", author = "Autora", isbn = "9780306406157"
+        });
+        var third = await Write(owner, HttpMethod.Post, "/api/library/manual", new
+        {
+            title = "Livro particular", author = "Autora", isbn = "0-306-40615-2"
+        });
+        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, third.StatusCode);
+        var firstId = (await first.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("book").GetProperty("id").GetGuid();
+        var secondId = (await second.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("book").GetProperty("id").GetGuid();
+        var thirdId = (await third.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("book").GetProperty("id").GetGuid();
+        Assert.Equal(firstId, secondId);
+        Assert.Equal(firstId, thirdId);
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await owner.GetAsync($"/api/books/{firstId}")).StatusCode);
+        Assert.Contains(firstId.ToString(),
+            await owner.GetStringAsync("/api/books/search?q=Livro%20particular"));
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await anonymous.GetAsync($"/api/books/{firstId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await anotherReader.GetAsync($"/api/books/{firstId}")).StatusCode);
+        Assert.DoesNotContain(firstId.ToString(),
+            await anotherReader.GetStringAsync("/api/books/search?q=Livro%20particular"));
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Write(anotherReader, HttpMethod.Post, $"/api/library/{firstId}"))
+            .StatusCode);
+        Assert.DoesNotContain("Livro particular", await owner.GetStringAsync("/api/books"));
+
+        await using var scope = factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+        var book = await db.Books.SingleAsync();
+        Assert.Equal(BookCatalogKind.Private, book.CatalogKind);
+        Assert.NotNull(book.OwnerUserId);
+        Assert.Equal("0306406152", book.Isbn10);
+        Assert.Equal("9780306406157", book.Isbn13);
+        Assert.Equal(1, await db.UserBooks.CountAsync());
+    }
+
+    [Fact]
+    public async Task Catalog_and_search_report_pack_availability_without_listing_imports()
+    {
+        using var factory = CreateFactory("catalog-kinds", new DisabledProvider());
+        using var client = factory.CreateClient();
+        var ready = new Book { Title = "Memoria pronta", Author = "Autora" };
+        var empty = new Book { Title = "Memoria vazia", Author = "Autor" };
+        var imported = new Book
+        {
+            Title = "Memoria importada", Author = "Autor externo",
+            CatalogKind = BookCatalogKind.Imported,
+            ExternalProvider = "OpenLibrary", ExternalId = "OL1W"
+        };
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            db.Books.AddRange(ready, empty, imported);
+            await db.SaveChangesAsync();
+            db.ReadingUnits.Add(new ReadingUnit
+            {
+                BookId = ready.Id, Title = "Começo", SafeLabel = "Capítulo 1",
+                Slug = "capitulo-1", OrderIndex = 10
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var catalog = await client.GetFromJsonAsync<JsonElement>("/api/books");
+        Assert.Equal(2, catalog.GetArrayLength());
+        Assert.DoesNotContain(catalog.EnumerateArray(), item =>
+            item.GetProperty("id").GetGuid() == imported.Id);
+        Assert.True(catalog.EnumerateArray().Single(item =>
+            item.GetProperty("id").GetGuid() == ready.Id)
+            .GetProperty("memoryPackAvailable").GetBoolean());
+        Assert.False(catalog.EnumerateArray().Single(item =>
+            item.GetProperty("id").GetGuid() == empty.Id)
+            .GetProperty("memoryPackAvailable").GetBoolean());
+
+        var search = await client.GetFromJsonAsync<JsonElement>(
+            "/api/books/search?q=Memoria");
+        Assert.Equal(3, search.GetArrayLength());
+        var importedResult = search.EnumerateArray().Single(item =>
+            item.GetProperty("id").GetGuid() == imported.Id);
+        Assert.Equal("OpenLibrary",
+            importedResult.GetProperty("externalProvider").GetString());
+        Assert.False(importedResult.GetProperty("memoryPackAvailable").GetBoolean());
+        Assert.True(search.EnumerateArray().Single(item =>
+            item.GetProperty("id").GetGuid() == ready.Id)
+            .GetProperty("memoryPackAvailable").GetBoolean());
+
+        var detail = await client.GetFromJsonAsync<JsonElement>($"/api/books/{ready.Id}");
+        Assert.True(detail.GetProperty("memoryPackAvailable").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Existing_external_match_is_returned_as_a_local_book()
+    {
+        using var factory = CreateFactory("known-external", new FakeProvider());
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        await Register(client);
+        var imported = new Book
+        {
+            Title = "Título local sem o termo pesquisado",
+            Author = "Autora",
+            CatalogKind = BookCatalogKind.Imported,
+            ExternalProvider = FakeProvider.Provider,
+            ExternalId = "external-demo-1"
+        };
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            db.Books.Add(imported);
+            await db.SaveChangesAsync();
+        }
+
+        var search = await client.GetFromJsonAsync<JsonElement>(
+            "/api/books/search?q=isbn-inexistente-localmente");
+
+        var result = Assert.Single(search.EnumerateArray());
+        Assert.Equal(imported.Id, result.GetProperty("id").GetGuid());
+        Assert.Equal("local", result.GetProperty("source").GetString());
+        Assert.Equal(HttpStatusCode.Created,
+            (await Write(client, HttpMethod.Post, $"/api/library/{imported.Id}")).StatusCode);
     }
 
     [Fact]
@@ -208,6 +391,63 @@ public sealed class LibraryEndpointTests
     }
 
     [Fact]
+    public async Task Page_only_progress_does_not_override_explicit_status()
+    {
+        using var factory = CreateFactory("page-status", new DisabledProvider());
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        await Register(client);
+
+        var created = await Write(client, HttpMethod.Post, "/api/library/manual", new
+        {
+            title = "Livro acompanhado por página", author = "Autora", isbn = (string?)null
+        });
+        var bookId = (await created.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("book").GetProperty("id").GetGuid();
+        Assert.Equal(HttpStatusCode.OK,
+            (await Write(client, HttpMethod.Patch, $"/api/library/{bookId}/status",
+                new { status = "Finished" })).StatusCode);
+
+        var progress = await Write(client, HttpMethod.Patch,
+            $"/api/library/{bookId}/progress", new { currentPage = 321 });
+
+        Assert.Equal(HttpStatusCode.OK, progress.StatusCode);
+        var result = await progress.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal("Finished", result.GetProperty("status").GetString());
+        Assert.Equal(321, result.GetProperty("currentPage").GetInt32());
+    }
+
+    [Fact]
+    public async Task Manual_book_limit_rejects_only_new_private_books()
+    {
+        using var factory = CreateFactory("manual-limit", new DisabledProvider());
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        await Register(client);
+        var me = await client.GetFromJsonAsync<JsonElement>("/api/auth/me");
+        var userId = me.GetProperty("id").GetGuid();
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            db.Books.AddRange(Enumerable.Range(1, 500).Select(index => new Book
+            {
+                Title = $"Livro particular {index}",
+                Author = "Autora",
+                CatalogKind = BookCatalogKind.Private,
+                OwnerUserId = userId
+            }));
+            await db.SaveChangesAsync();
+        }
+
+        var response = await Write(client, HttpMethod.Post, "/api/library/manual", new
+        {
+            title = "Livro além do limite", author = "Autora", isbn = (string?)null
+        });
+
+        Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
+    }
+
+    [Fact]
     public async Task Concurrent_external_imports_share_one_book_and_add_it_to_both_libraries()
     {
         using var factory = CreateFactory("concurrent-external", new CoordinatedProvider());
@@ -218,9 +458,11 @@ public sealed class LibraryEndpointTests
 
         var responses = await Task.WhenAll(
             Write(readerA, HttpMethod.Post, "/api/library/external",
-                new { externalId = "external-demo-1" }),
+                new { externalProvider = CoordinatedProvider.Provider,
+                    externalId = "external-demo-1" }),
             Write(readerB, HttpMethod.Post, "/api/library/external",
-                new { externalId = "external-demo-1" }));
+                new { externalProvider = CoordinatedProvider.Provider,
+                    externalId = "external-demo-1" }));
         Assert.All(responses, response => Assert.Equal(HttpStatusCode.OK, response.StatusCode));
         var bookIds = await Task.WhenAll(responses.Select(async response =>
             (await response.Content.ReadFromJsonAsync<JsonElement>())
@@ -290,21 +532,36 @@ public sealed class LibraryEndpointTests
 
     private sealed class FakeProvider : IBookMetadataProvider
     {
+        public const string Provider = "TestProvider";
         private static readonly ExternalBookMetadata Metadata = new(
-            "external-demo-1", "Livro externo", "Autora",
+            Provider, "external-demo-1", "Livro externo", "Autora",
             null, null, null, null, null, "pt-BR");
         public bool IsConfigured => true;
         public Task<IReadOnlyList<ExternalBookMetadata>> SearchAsync(
             string query, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<ExternalBookMetadata>>([Metadata]);
         public Task<ExternalBookMetadata?> GetAsync(
-            string externalId, CancellationToken cancellationToken) =>
+            string provider, string externalId, CancellationToken cancellationToken) =>
             Task.FromResult<ExternalBookMetadata?>(
-                externalId == Metadata.ExternalId ? Metadata : null);
+                provider == Provider && externalId == Metadata.ExternalId ? Metadata : null);
+    }
+
+    private sealed class DisabledProvider : IBookMetadataProvider
+    {
+        public bool IsConfigured => false;
+
+        public Task<IReadOnlyList<ExternalBookMetadata>> SearchAsync(
+            string query, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<ExternalBookMetadata>>([]);
+
+        public Task<ExternalBookMetadata?> GetAsync(
+            string provider, string externalId, CancellationToken cancellationToken) =>
+            Task.FromResult<ExternalBookMetadata?>(null);
     }
 
     private sealed class CoordinatedProvider : IBookMetadataProvider
     {
+        public const string Provider = "CoordinatedTestProvider";
         private readonly TaskCompletionSource<bool> paired =
             new(TaskCreationOptions.RunContinuationsAsynchronously);
         private int requests;
@@ -313,12 +570,12 @@ public sealed class LibraryEndpointTests
             string query, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<ExternalBookMetadata>>([]);
         public async Task<ExternalBookMetadata?> GetAsync(
-            string externalId, CancellationToken cancellationToken)
+            string provider, string externalId, CancellationToken cancellationToken)
         {
             if (Interlocked.Increment(ref requests) == 2) paired.TrySetResult(true);
             await paired.Task.WaitAsync(TimeSpan.FromSeconds(10), cancellationToken);
-            return externalId == "external-demo-1"
-                ? new ExternalBookMetadata(externalId, "Livro externo", "Autora",
+            return provider == Provider && externalId == "external-demo-1"
+                ? new ExternalBookMetadata(Provider, externalId, "Livro externo", "Autora",
                     null, null, null, null, null, "pt-BR") : null;
         }
     }

@@ -24,8 +24,22 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
 }
 builder.Services.AddScoped<KnowledgeReader>();
 builder.Services.AddScoped<BookConsistency>();
-builder.Services.AddHttpClient<IBookMetadataProvider, GoogleBooksProvider>(
+builder.Services.AddHttpClient<GoogleBooksProvider>(
     client => client.Timeout = TimeSpan.FromSeconds(8));
+builder.Services.AddHttpClient<OpenLibraryProvider>(client =>
+{
+    client.BaseAddress = new Uri("https://openlibrary.org/");
+    client.Timeout = TimeSpan.FromSeconds(8);
+    var contact = builder.Configuration["OPEN_LIBRARY_CONTACT"]?.Trim();
+    if (string.IsNullOrWhiteSpace(contact))
+        contact = "https://github.com/DiogoJP202/Mnemora";
+    client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mnemora/1.0 ({contact})");
+});
+builder.Services.AddTransient<IBookMetadataSource>(services =>
+    services.GetRequiredService<GoogleBooksProvider>());
+builder.Services.AddTransient<IBookMetadataSource>(services =>
+    services.GetRequiredService<OpenLibraryProvider>());
+builder.Services.AddTransient<IBookMetadataProvider, CompositeBookMetadataProvider>();
 builder.Services
     .AddIdentity<IdentityUser<Guid>, IdentityRole<Guid>>(options =>
     {

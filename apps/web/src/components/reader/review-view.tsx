@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { apiGet, apiWrite } from "@/lib/api";
 import { BookLoreNav } from "@/components/reader/book-lore-nav";
+import { MemoryPackUnavailable } from "@/components/reader/memory-pack-unavailable";
 import type { LoreEntitySummary } from "@/lib/lore-types";
 import type { Book } from "@/lib/reader-types";
 
@@ -22,24 +23,17 @@ export function ReviewView({ bookId }: { bookId: string }) {
   const [error, setError] = useState<string | null>(null);
   const [announcement, setAnnouncement] = useState("");
 
-  const load = useCallback(async () => {
-    setError(null);
-    const [foundBook, reviewCards] = await Promise.all([
-      apiGet<Book>(`/api/books/${bookId}`),
-      apiGet<LoreEntitySummary[]>(`/api/books/${bookId}/review`),
-    ]);
-    setBook(foundBook);
-    setCards(reviewCards);
-    setIndex(0);
-    setRemembered(0);
+  const fetchReview = useCallback(async () => {
+    const foundBook = await apiGet<Book>(`/api/books/${bookId}`);
+    const reviewCards = foundBook.memoryPackAvailable
+      ? await apiGet<LoreEntitySummary[]>(`/api/books/${bookId}/review`)
+      : [];
+    return { foundBook, reviewCards };
   }, [bookId]);
 
   useEffect(() => {
     let active = true;
-    Promise.all([
-      apiGet<Book>(`/api/books/${bookId}`),
-      apiGet<LoreEntitySummary[]>(`/api/books/${bookId}/review`),
-    ]).then(([foundBook, reviewCards]) => {
+    fetchReview().then(({ foundBook, reviewCards }) => {
       if (!active) return;
       setBook(foundBook);
       setCards(reviewCards);
@@ -47,7 +41,7 @@ export function ReviewView({ bookId }: { bookId: string }) {
       if (active) setError(cause instanceof Error ? cause.message : "Não foi possível preparar a revisão.");
     });
     return () => { active = false; };
-  }, [bookId]);
+  }, [fetchReview]);
 
   async function answer(value: boolean) {
     const card = cards?.[index];
@@ -67,8 +61,14 @@ export function ReviewView({ bookId }: { bookId: string }) {
   }
 
   async function retryLoad() {
+    setError(null);
+    setCards(null);
     try {
-      await load();
+      const { foundBook, reviewCards } = await fetchReview();
+      setBook(foundBook);
+      setCards(reviewCards);
+      setIndex(0);
+      setRemembered(0);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível preparar a revisão.");
     }
@@ -85,8 +85,9 @@ export function ReviewView({ bookId }: { bookId: string }) {
         <h1>Reencontre cinco <em>lembranças.</em></h1>
         <p>Uma pausa curta para reforçar quem e o que você já conheceu na história.</p>
       </div>
-      <BookLoreNav bookId={bookId} active="/review" />
+      <BookLoreNav bookId={bookId} active="/review" memoryPackAvailable={book?.memoryPackAvailable ?? false} />
       <div className="sr-only" aria-live="polite">{announcement}</div>
+      {book && !book.memoryPackAvailable ? <MemoryPackUnavailable bookId={bookId} /> : <>
       {error && <div className="form-alert" role="alert">{error}<button type="button" onClick={() => void retryLoad()}>Tentar novamente</button></div>}
       {cards === null && !error && <div className="review-card skeleton" role="status"><span className="sr-only">Preparando revisão…</span></div>}
       {cards?.length === 0 && (
@@ -122,6 +123,7 @@ export function ReviewView({ bookId }: { bookId: string }) {
           <div><button type="button" className="button button-outline" onClick={() => void retryLoad()}>Revisar novamente</button><Link className="button button-ink" href={`/app/books/${bookId}`}>Voltar ao livro <span aria-hidden="true">↗</span></Link></div>
         </div>
       )}
+      </>}
     </div>
   );
 }

@@ -19,6 +19,8 @@ O filesystem do serviço não é persistente. O banco SQLite, as contas cadastra
 
 O Blueprint também não solicita `ADMIN_EMAIL` nem `ADMIN_PASSWORD`. A demonstração pública permite cadastrar leitores e testar a experiência de leitura, mas não fornece acesso inicial à área `/admin`.
 
+A Open Library funciona como catálogo externo padrão sem chave. Assim, o leitor pode buscar por título, autor ou ISBN e importar metadados mesmo na demonstração. Se o livro não for encontrado, ele pode cadastrar título, autor opcional e ISBN opcional; esse registro manual fica privado à conta. Livros sem memory pack ainda permitem status, página e notas, mas não oferecem lore.
+
 ## Criar a demonstração pelo Blueprint
 
 1. Abra o [Deploy to Render do Mnemora](https://render.com/deploy?repo=https://github.com/DiogoJP202/Mnemora) ou, no Dashboard, escolha **New > Blueprint**.
@@ -30,7 +32,7 @@ O Blueprint também não solicita `ADMIN_EMAIL` nem `ADMIN_PASSWORD`. A demonstr
 
 O entrypoint usa `RENDER_EXTERNAL_URL` para configurar a origem web aceita pela API. Não é necessário antecipar a URL gerada. Na inicialização, a API aplica as migrations e executa o seed idempotente.
 
-Se você adicionar um domínio próprio, configure `Mnemora__WebOrigin` com a origem HTTPS exata desse domínio e faça um novo deploy. Para habilitar a busca do Google Books, adicione `GOOGLE_BOOKS_API_KEY` como secret em **Environment** e faça outro deploy.
+Se você adicionar um domínio próprio, configure `Mnemora__WebOrigin` com a origem HTTPS exata desse domínio e faça um novo deploy. Para acrescentar o Google Books à busca, adicione `GOOGLE_BOOKS_API_KEY` como secret em **Environment** e faça outro deploy. `OPEN_LIBRARY_CONTACT` é opcional e pode conter um e-mail ou URL de contato para o `User-Agent`; quando ausente, a aplicação usa a URL pública do repositório.
 
 ## Validar a implantação
 
@@ -38,9 +40,10 @@ Depois que o serviço ficar disponível:
 
 1. abra `/api/health` e confirme a resposta `{"status":"ok"}`;
 2. abra a landing page e verifique o manifesto da PWA;
-3. cadastre um leitor e percorra biblioteca, progresso, Recall, notas e revisão;
-4. avance e retroceda o progresso para confirmar que o lore posterior volta a ficar oculto;
-5. aguarde ou reinicie o serviço apenas se quiser confirmar que a demo recupera o pack e descarta os dados efêmeros.
+3. cadastre um leitor, busque um livro na Open Library, importe-o e confirme que ele aparece na biblioteca;
+4. cadastre manualmente outro livro e confirme que status, página e notas funcionam sem um memory pack;
+5. percorra o pack demonstrativo, avance e retroceda o progresso e confirme que o lore posterior volta a ficar oculto;
+6. aguarde ou reinicie o serviço apenas se quiser confirmar que a demo recupera o pack e descarta os dados efêmeros.
 
 O health check passa pelo Next.js e pelo rewrite até a API, então verifica os dois processos do container. Respostas privadas usam `Cache-Control: no-store`, e o service worker não armazena `/api`, `/app` nem `/admin`.
 

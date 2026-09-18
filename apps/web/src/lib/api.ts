@@ -28,8 +28,14 @@ export async function apiWrite<T = void>(
 
 async function errorMessage(response: Response): Promise<string> {
   try {
-    const problem = (await response.json()) as { title?: string; detail?: string };
-    return problem.detail ?? problem.title ?? "Não foi possível concluir a operação.";
+    const payload = (await response.json()) as unknown;
+    if (typeof payload === "string" && payload.trim()) return payload;
+    if (payload && typeof payload === "object") {
+      const problem = payload as { title?: unknown; detail?: unknown };
+      if (typeof problem.detail === "string" && problem.detail.trim()) return problem.detail;
+      if (typeof problem.title === "string" && problem.title.trim()) return problem.title;
+    }
+    return "Não foi possível concluir a operação.";
   } catch {
     return "Não foi possível concluir a operação.";
   }

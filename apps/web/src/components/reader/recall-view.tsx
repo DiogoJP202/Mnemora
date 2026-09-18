@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet } from "@/lib/api";
 import { BookLoreNav } from "@/components/reader/book-lore-nav";
+import { MemoryPackUnavailable } from "@/components/reader/memory-pack-unavailable";
 import type { LoreEntitySummary } from "@/lib/lore-types";
 import type { Book } from "@/lib/reader-types";
 
@@ -81,8 +82,17 @@ export function RecallView({ bookId }: { bookId: string }) {
         <h1>Encontre o que a memória <em>quase guardou.</em></h1>
         <p>Busque por um nome, apelido ou detalhe que você já encontrou na história.</p>
       </div>
-      <BookLoreNav bookId={bookId} active="/recall" />
-
+      <BookLoreNav bookId={bookId} active="/recall" memoryPackAvailable={book?.memoryPackAvailable ?? false} />
+      {!book && !error && <div className="search-loading" role="status">Preparando o Recall…</div>}
+      {error && (
+        <div className="form-alert" role="alert">
+          {error}
+          {searchedQuery && (
+            <button type="button" onClick={() => void runSearch(searchedQuery)}>Tentar novamente</button>
+          )}
+        </div>
+      )}
+      {book && !book.memoryPackAvailable ? <MemoryPackUnavailable bookId={bookId} /> : book ? <>
       <form className="recall-search" role="search" onSubmit={search}>
         <label htmlFor="recall-query">O que você quer relembrar?</label>
         <div>
@@ -108,15 +118,6 @@ export function RecallView({ bookId }: { bookId: string }) {
       </form>
 
       <div className="sr-only" aria-live="polite" aria-atomic="true">{liveMessage}</div>
-      {error && (
-        <div className="form-alert" role="alert">
-          {error}
-          {searchedQuery && (
-            <button type="button" onClick={() => void runSearch(searchedQuery)}>Tentar novamente</button>
-          )}
-        </div>
-      )}
-
       <section id="recall-results" className="recall-results" aria-busy={searching} aria-label="Resultados do Recall">
         {!searchedQuery && !error && (
           <div className="recall-prompt">
@@ -164,6 +165,7 @@ export function RecallView({ bookId }: { bookId: string }) {
           </>
         )}
       </section>
+      </> : null}
     </div>
   );
 }

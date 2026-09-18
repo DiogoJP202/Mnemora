@@ -4,15 +4,18 @@ export type Book = {
   author: string;
   description: string | null;
   coverUrl: string | null;
+  memoryPackAvailable: boolean;
 };
 
 export type SearchBook = {
   id: string | null;
   externalId: string | null;
+  externalProvider: string | null;
   source: "local" | "external";
   title: string;
   author: string;
   coverUrl: string | null;
+  memoryPackAvailable: boolean;
 };
 
 export type LibraryBook = {

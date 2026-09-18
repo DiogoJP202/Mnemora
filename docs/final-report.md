@@ -2,9 +2,9 @@
 
 ## Estado da entrega
 
-O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, catálogo e biblioteca, progresso por unidade, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo. A regra antisspoiler permanece no backend e impede que dados futuros sejam enviados ao frontend.
+O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, busca externa, cadastro manual de livros, biblioteca, progresso por unidade, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo. A regra antisspoiler permanece no backend e impede que dados futuros sejam enviados ao frontend.
 
-Este relatório foi preparado em 17 de setembro de 2026. O histórico abaixo foi confirmado na branch `main` até `684550e`, já sincronizado com `origin/main`. A fase 10 corresponde ao commit final que incluirá a documentação e as verificações de entrega; seu hash só existe depois que esse commit é criado.
+Este relatório foi atualizado em 18 de setembro de 2026. O histórico abaixo foi confirmado na branch `main` até a fase 12, commit `9eb427b`, já sincronizado com `origin/main`. A fase 13 está documentada neste mesmo commit, criado depois das verificações finais.
 
 ## Histórico por fase
 
@@ -20,16 +20,21 @@ Este relatório foi preparado em 17 de setembro de 2026. O histórico abaixo foi
 | 07 — Recall | `b976d0e` | Busca por nomes, descrições, aliases, fatos e pistas conhecidos, com normalização de diacríticos |
 | 08 — Notas e revisão | `a8dea24` | Notas privadas, vínculo seguro a entidades/unidades, revisão de até cinco entidades e feedback |
 | 09 — PWA e acabamento | `684550e` | Temas light/dark/system, responsividade, acessibilidade, metadata, ícones, manifesto e cache seguro |
-| 10 — Qualidade e entrega | commit final | Revisão completa, documentação técnica, instruções de operação, limitações e relatório final |
+| 10 — Qualidade e entrega | `e1f2347` | Revisão completa, documentação técnica, instruções de operação, limitações e relatório final |
+| 11 — Preparação do deploy | `85b2c2a` | Container de produção, Blueprint do Render, health check e documentação operacional |
+| 12 — Demonstração gratuita | `9eb427b` | Render gratuito sem cartão, aviso de dados efêmeros e seed sem Admin obrigatório |
+| 13 — Livros do leitor | este commit | Open Library sem chave, Google Books opcional, cadastro manual privado e experiência para livros sem pack |
 
 ## Funcionalidades entregues
 
 ### Produto para o leitor
 
 - cadastro, login, logout e sessão por cookie HttpOnly;
-- catálogo local e busca externa opcional pelo Google Books;
-- importação idempotente de metadados, sem descrição externa potencialmente reveladora;
+- catálogo local e busca externa pela Open Library sem chave, com Google Books opcional;
+- importação idempotente e reutilizável pelo par provider/identificador, sem descrição externa potencialmente reveladora;
+- cadastro manual de livro privado ao leitor, com título obrigatório e autor/ISBN opcionais;
 - biblioteca privada, status de leitura, progresso por unidade e página informativa;
+- uso de status, página e notas mesmo quando o livro não possui memory pack;
 - títulos neutros para unidades ainda não alcançadas;
 - listas de personagens, facções e lugares, detalhe com aliases, fatos e relações conhecidos;
 - timeline de eventos conhecidos em ordem cronológica própria;
@@ -55,14 +60,14 @@ Este relatório foi preparado em 17 de setembro de 2026. O histórico abaixo foi
 - rate limit de autenticação, Recall, integração externa e escritas de notas/revisão;
 - limite de 200 notas por usuário e livro e retenção das 500 atividades de revisão mais recentes por usuário e livro;
 - `401`/`403` para API sem redirects HTML;
-- isolamento por sessão para biblioteca, progresso, notas e revisão;
+- isolamento por sessão para biblioteca, livros manuais, progresso, notas e revisão;
 - headers de navegador com CSP, bloqueio de framing, HSTS, `nosniff`, política de referrer e Permissions Policy;
 - suporte a proxy reverso por lista explícita de IPs confiáveis;
 - banco SQLite versionado por migrations, com o arquivo local fora do Git;
 - service worker restrito ao shell público e a assets estáticos.
 - CI para testes, lint, builds, contratos da PWA e auditorias de dependências.
 
-## Evidências de validação
+## Evidências de validação da entrega inicial
 
 As verificações finais da fase 10 produziram estes resultados:
 
@@ -83,6 +88,20 @@ As verificações finais da fase 10 produziram estes resultados:
 | Busca de segredos no diff | Nenhum segredo real detectado | Arquivos versionados e alterações da fase 10 |
 
 Os 28 testes .NET incluem os casos críticos pedidos no aceite: antes, exatamente no ponto e depois da revelação; ausência de progresso; entidade, alias, fato, relação e evento futuros; avanço e retrocesso; título neutro; termo futuro no Recall; biblioteca e notas de outro usuário; limite de cinco itens na revisão; quotas de notas e histórico de revisão; role Admin; consistência de reordenação; preview com projeção segura; rejeição de escrita sem antiforgery; persistência das chaves de proteção quando configurada; e impossibilidade de promover uma conta existente com senha divergente durante o seed.
+
+A fase 13 acrescenta testes de providers, importação por provider, privacidade do cadastro manual, deduplicação e uso de livros sem pack. Os totais da tabela anterior permanecem como registro da fase 10.
+
+### Evidências da fase 13
+
+| Verificação | Resultado observado | Cobertura principal |
+| --- | --- | --- |
+| `dotnet test Mnemora.slnx --configuration Release --no-restore` | 41 testes aprovados | Providers, importação idempotente, ISBN, privacidade, quotas, upgrade da migration, administração e regressões antisspoiler |
+| `npm run lint` e `npm run build` em `apps/web` | Aprovados | Componentes do leitor, rotas App Router e tipos do contrato atualizado |
+| `node --test tests/pwa/pwa-assets.test.mjs` | 4 testes aprovados | Manifesto, ícones e limites do cache da PWA |
+| `dotnet ef migrations has-pending-model-changes` | Nenhuma alteração pendente | Correspondência entre o modelo EF Core e a migration da fase |
+| Jornada em navegador local | Aprovada em desktop e 360 px | Busca real na Open Library, importação, cadastro manual, acompanhamento, notas, privacidade visual e ausência de overflow/erros de console |
+| Auditorias npm e NuGet | 0 vulnerabilidades conhecidas | Dependências diretas e transitivas disponíveis aos gerenciadores |
+| `git diff --check` e busca de segredos | Aprovados | Integridade do diff e ausência de credenciais versionadas |
 
 A afirmação “zero violações” se limita às páginas e estados visitados pela auditoria automatizada. Ela não substitui avaliação manual completa com leitores de tela, diferentes tecnologias assistivas ou uma auditoria de conteúdo editorial.
 
@@ -128,12 +147,14 @@ Abra `http://localhost:3000`. O rewrite padrão encaminha `/api` para a API loca
 ### 4. Validar a jornada do leitor
 
 1. Cadastre um leitor e adicione `O Arquivo da Neblina` à biblioteca.
-2. Sem unidade selecionada, confirme que listas de lore, timeline, Recall e revisão não expõem conteúdo.
-3. Marque o Capítulo 1 e confirme que Nara aparece exatamente nessa fronteira.
-4. Avance ao Capítulo 2 e confirme o conteúdo liberado; depois retorne ao Capítulo 1 e confirme que ele desaparece.
-5. Pesquise um alias ou fato de capítulo futuro e confirme uma lista vazia, sem mensagem que sugira existência futura.
-6. Crie uma nota geral e uma nota vinculada; retroceda e confirme que somente a referência ainda permitida permanece visível.
-7. Registre as duas opções de revisão e confirme que nenhuma delas libera conteúdo adicional.
+2. Busque outro livro por título, autor ou ISBN, importe um resultado da Open Library e confirme que status, página e notas ficam disponíveis sem lore.
+3. Cadastre manualmente um livro ausente e confirme, com uma segunda conta, que ele não aparece na busca nem pode ser aberto.
+4. Sem unidade selecionada no pack demonstrativo, confirme que listas de lore, timeline, Recall e revisão não expõem conteúdo.
+5. Marque o Capítulo 1 e confirme que Nara aparece exatamente nessa fronteira.
+6. Avance ao Capítulo 2 e confirme o conteúdo liberado; depois retorne ao Capítulo 1 e confirme que ele desaparece.
+7. Pesquise um alias ou fato de capítulo futuro e confirme uma lista vazia, sem mensagem que sugira existência futura.
+8. Crie uma nota geral e uma nota vinculada; retroceda e confirme que somente a referência ainda permitida permanece visível.
+9. Registre as duas opções de revisão e confirme que nenhuma delas libera conteúdo adicional.
 
 ### 5. Validar administração e segurança
 
@@ -162,13 +183,13 @@ Para verificar a PWA em condições reais de service worker, execute o build de 
 - Recuperação de senha é informativa no MVP; não há envio de e-mail nem fluxo de redefinição.
 - Busca semântica, geração por IA e enriquecimento automático de lore não estão implementados.
 - A revisão registra feedback, mas não agenda cartões nem implementa repetição espaçada.
-- O Google Books requer `GOOGLE_BOOKS_API_KEY`; sem ela, catálogo e busca local continuam funcionando.
-- Um livro importado traz metadados, não um pack de lore. As telas de lore ficam vazias até a curadoria administrativa.
+- A Open Library funciona sem chave; o Google Books só participa quando `GOOGLE_BOOKS_API_KEY` está configurada.
+- Um livro importado ou manual traz somente metadados, não um pack de lore. Ele permite status, página e notas; a navegação de lore permanece indisponível até existir curadoria administrativa.
 - SQLite é adequado ao uso local e a uma instância pequena; alta concorrência e múltiplas réplicas pedem outro provider relacional.
 - O shell público pode funcionar offline, mas a área privada exige rede por decisão de segurança e consistência antisspoiler.
 - A curadoria continua responsável por escrever nome, resumo e imagem seguros no primeiro ponto de conhecimento. A aplicação valida a ordem estrutural, não o significado do texto.
-- O MVP não inclui recuperação de desastre, observabilidade centralizada, deploy automatizado ou ambiente de produção provisionado.
+- A demonstração gratuita no Render usa armazenamento efêmero; recuperação de desastre e observabilidade centralizada ainda não estão implementadas.
 
 ## Conclusão de aceite
 
-O conjunto entregue cobre o escopo funcional planejado e fecha a fase 10 com CI, endurecimento de segurança, auditorias e documentação para instalação, operação, revisão e continuidade. O critério central foi preservado em todas as superfícies: o frontend recebe somente o conhecimento permitido pela unidade de leitura atual, e qualquer retrocesso é aplicado na requisição seguinte.
+O conjunto entregue cobre o escopo funcional planejado e permite que cada leitor mantenha livros além do catálogo curado, sem transformar metadados externos em lore. O critério central foi preservado em todas as superfícies: o frontend recebe somente o conhecimento permitido pela unidade de leitura atual, e qualquer retrocesso é aplicado na requisição seguinte.

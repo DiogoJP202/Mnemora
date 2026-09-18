@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Mnemora.Domain;
 using Mnemora.Infrastructure;
 
 namespace Mnemora.Tests;
@@ -39,6 +40,7 @@ public sealed class AdminEndpointTests
             (await anonymous.GetAsync("/api/admin/books")).StatusCode);
 
         var adminEmail = $"admin-{Guid.NewGuid():N}@test.local";
+        var privateBookId = Guid.Empty;
         await using (var scope = factory.Services.CreateAsyncScope())
         {
             var roles = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole<Guid>>>();
@@ -47,10 +49,35 @@ public sealed class AdminEndpointTests
             var admin = new IdentityUser<Guid> { UserName = adminEmail, Email = adminEmail };
             Assert.True((await users.CreateAsync(admin, "StrongAdminPass123")).Succeeded);
             Assert.True((await users.AddToRoleAsync(admin, "Admin")).Succeeded);
+            var normalUser = await users.FindByEmailAsync(normalEmail);
+            Assert.NotNull(normalUser);
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            var privateBook = new Book
+            {
+                Title = "Livro privado do leitor",
+                Author = "Autora",
+                CatalogKind = BookCatalogKind.Private,
+                OwnerUserId = normalUser.Id
+            };
+            db.Books.Add(privateBook);
+            await db.SaveChangesAsync();
+            privateBookId = privateBook.Id;
         }
         using var client = factory.CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
         Assert.Equal(HttpStatusCode.OK, (await Write(client, "/api/auth/login",
             new { email = adminEmail, password = "StrongAdminPass123" })).StatusCode);
+        Assert.DoesNotContain("Livro privado do leitor",
+            await client.GetStringAsync("/api/admin/books"));
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/admin/books/{privateBookId}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await client.GetAsync($"/api/admin/books/{privateBookId}/reading-units")).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound,
+            (await Write(client, $"/api/admin/books/{privateBookId}/reading-units", new
+            {
+                title = "Capítulo 1", safeLabel = "Capítulo 1",
+                slug = "capitulo-1", type = "Chapter", orderIndex = 10
+            })).StatusCode);
 
         var bookResponse = await Write(client, "/api/admin/books",
             new { title = "Livro de teste", author = "Equipe Mnemora" });

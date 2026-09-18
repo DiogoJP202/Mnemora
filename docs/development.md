@@ -24,9 +24,30 @@ Em produção, mantenha frontend e `/api` na mesma origem e termine TLS no proxy
 
 Os endpoints administrativos usam `/api/admin` e exigem a role Admin. Cada escrita pela interface obtém um token em `GET /api/auth/csrf` e o envia no header `X-CSRF-TOKEN`. O backend devolve 401 sem sessão e 403 para leitor sem role Admin.
 
-Na jornada do leitor, o catálogo local está em `GET /api/books` e a busca em `GET /api/books/search?q=...`. A busca externa pelo Google Books só é habilitada com `GOOGLE_BOOKS_API_KEY`; sem chave, a busca local continua funcionando. A importação de um resultado externo ocorre em `POST /api/library/external` e é idempotente por identificador do provider. O Mnemora importa apenas metadados bibliográficos: a descrição externa não entra no catálogo, pois pode revelar partes da história.
+Na jornada do leitor, o catálogo curado está em `GET /api/books` e a busca por título, autor ou ISBN em `GET /api/books/search?q=...`. A busca combina o catálogo local com a Open Library, disponível sem chave. `GOOGLE_BOOKS_API_KEY` acrescenta o Google Books como fonte opcional. Os providers têm timeout independente, e uma falha parcial não elimina resultados obtidos pela outra fonte. `OPEN_LIBRARY_CONTACT` pode informar um e-mail ou URL no `User-Agent` das requisições; seu padrão é a URL pública do repositório.
+
+A importação de um resultado externo ocorre em `POST /api/library/external` com o corpo abaixo. O valor de `externalProvider` deve ser devolvido pela busca, por exemplo `OpenLibrary` ou `GoogleBooks`. A operação é idempotente pelo par provider/identificador, e o registro importado pode ser reutilizado por outros leitores. O Mnemora importa somente metadados bibliográficos: a descrição externa nunca entra no catálogo, pois pode revelar partes da história.
+
+```json
+{
+  "externalProvider": "OpenLibrary",
+  "externalId": "OL12345W"
+}
+```
+
+Se o livro não estiver nos resultados, `POST /api/library/manual` aceita título obrigatório, autor opcional e ISBN-10 ou ISBN-13 opcional. A ausência de autor usa “Autor não informado”. Um ISBN informado deve ter dígito verificador válido. O livro manual é privado: somente a conta proprietária consegue encontrá-lo, abrir seus detalhes ou adicioná-lo à biblioteca.
+
+```json
+{
+  "title": "Meu livro",
+  "author": "Autora opcional",
+  "isbn": "9780306406157"
+}
+```
 
 A biblioteca pertence à sessão autenticada (`GET /api/library`). O leitor adiciona um livro com `POST /api/library/{bookId}`, escolhe uma unidade com `PATCH /api/library/{bookId}/progress` e pode retroceder a qualquer momento. A página opcional é uma referência pessoal, sem efeito sobre a visibilidade do lore. Em `GET /api/books/{bookId}/reading-units`, títulos de unidades ainda não alcançadas são substituídos por rótulos neutros. O status “Finished” também não substitui uma unidade de progresso válida para o motor antisspoiler.
+
+Os DTOs de catálogo e biblioteca expõem `memoryPackAvailable`. Sem unidades de leitura, o livro continua aceitando mudança de status, página de referência e notas gerais; a interface não mostra navegação de lore, timeline, Recall ou revisão. Um provider externo ou cadastro manual nunca cria lore automaticamente.
 
 Para explorar o pack de um livro da biblioteca, use `GET /api/books/{bookId}/entities` (opcional `type`), `/factions`, `/locations` e `/timeline`; o detalhe fica em `GET /api/entities/{entityId}`. Todos esses resultados passam pelo `KnowledgeReader` e são calculados novamente após cada alteração de progresso. Uma entidade futura responde 404 mesmo quando seu identificador é conhecido por outro meio.
 

@@ -26,9 +26,21 @@ public sealed class MnemoraDbContext(DbContextOptions<MnemoraDbContext> options)
         {
             entity.Property(x => x.Title).HasMaxLength(300);
             entity.Property(x => x.Author).HasMaxLength(300);
+            entity.Property(x => x.CatalogKind).HasConversion<string>().HasMaxLength(30)
+                .HasDefaultValue(BookCatalogKind.Curated);
             entity.Property(x => x.ExternalProvider).HasMaxLength(80);
             entity.Property(x => x.ExternalId).HasMaxLength(200);
             entity.HasIndex(x => new { x.ExternalProvider, x.ExternalId }).IsUnique();
+            entity.HasIndex(x => new { x.CatalogKind, x.OwnerUserId });
+            entity.HasIndex(x => new { x.OwnerUserId, x.Isbn10 }).IsUnique()
+                .HasFilter("\"CatalogKind\" = 'Private' AND \"Isbn10\" IS NOT NULL");
+            entity.HasIndex(x => new { x.OwnerUserId, x.Isbn13 }).IsUnique()
+                .HasFilter("\"CatalogKind\" = 'Private' AND \"Isbn13\" IS NOT NULL");
+            entity.HasOne<IdentityUser<Guid>>().WithMany().HasForeignKey(x => x.OwnerUserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.ToTable(table => table.HasCheckConstraint("CK_Books_CatalogOwner",
+                "(\"CatalogKind\" = 'Private' AND \"OwnerUserId\" IS NOT NULL) OR "
+                + "(\"CatalogKind\" <> 'Private' AND \"OwnerUserId\" IS NULL)"));
         });
         builder.Entity<ReadingUnit>(entity =>
         {

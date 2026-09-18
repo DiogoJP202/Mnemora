@@ -64,7 +64,8 @@ public static class SeedData
             Description = "Uma viajante segue marcas deixadas em uma cidade coberta de névoa.",
             Language = "pt-BR",
             ExternalProvider = "MnemoraSeed",
-            ExternalId = "mist-archive-v1"
+            ExternalId = "mist-archive-v1",
+            CatalogKind = BookCatalogKind.Curated
         };
         db.Books.Add(book);
         await db.SaveChangesAsync();

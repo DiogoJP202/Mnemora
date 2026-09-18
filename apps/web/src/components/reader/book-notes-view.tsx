@@ -26,7 +26,7 @@ export function BookNotesView({ bookId }: { bookId: string }) {
         <h1>Um lugar para o que <em>você percebeu.</em></h1>
         <p>Registre teorias, nomes e detalhes da sua leitura. Este espaço pertence somente a você.</p>
       </div>
-      <BookLoreNav bookId={bookId} active="/notes" />
+      <BookLoreNav bookId={bookId} active="/notes" memoryPackAvailable={book?.memoryPackAvailable ?? false} />
       <NotesPanel bookId={bookId} />
     </div>
   );

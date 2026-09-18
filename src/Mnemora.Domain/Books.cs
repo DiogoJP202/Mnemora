@@ -1,5 +1,7 @@
 namespace Mnemora.Domain;
 
+public enum BookCatalogKind { Curated, Imported, Private }
+
 public sealed class Book
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -15,6 +17,8 @@ public sealed class Book
     public string? Language { get; set; }
     public string? ExternalProvider { get; set; }
     public string? ExternalId { get; set; }
+    public BookCatalogKind CatalogKind { get; set; } = BookCatalogKind.Curated;
+    public Guid? OwnerUserId { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
