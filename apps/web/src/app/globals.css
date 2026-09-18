@@ -246,3 +246,37 @@ input::placeholder, textarea::placeholder { color: var(--ink-soft); opacity: .82
 @media (prefers-reduced-motion: reduce) {
   .skip-link { transition: none; }
 }
+
+/* Edition metadata and external-book confirmation */
+.catalog-item { display: grid; grid-template-columns: 60px minmax(0, 1fr) auto; align-items: center; gap: 16px 23px; }
+.catalog-item-reviewing { border-color: var(--olive); }
+.catalog-info { min-width: 0; }
+.catalog-info h2 { line-height: 1.2; }
+.catalog-info .catalog-subtitle { margin: -2px 0 5px; font-family: Georgia, serif; font-style: italic; line-height: 1.35; }
+.catalog-info .catalog-author { color: var(--ink); }
+.catalog-bibliography { display: flex; flex-wrap: wrap; gap: 4px 0; margin-top: 10px; color: var(--ink-soft); }
+.catalog-bibliography span { display: inline-flex; align-items: center; font-size: 11px; line-height: 1.4; }
+.catalog-bibliography span + span::before { margin: 0 8px; color: var(--accent); content: "•"; }
+.external-book-review { display: grid; grid-column: 1 / -1; grid-template-columns: minmax(210px, .7fr) minmax(320px, 1.3fr); gap: 22px 38px; margin: 2px -20px -16px; padding: 25px 20px 22px; border-top: 1px solid var(--line); background: var(--surface-tint); }
+.external-review-intro h3 { margin: 9px 0 7px; font-family: Georgia, serif; font-size: clamp(27px, 3vw, 35px); font-weight: 400; letter-spacing: -.035em; line-height: 1.1; }
+.external-review-intro h3:focus { outline: 0; }
+.external-review-intro h3:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+.external-review-intro p { margin: 0; color: var(--ink-soft); font-size: 13px; line-height: 1.55; }
+.external-review-metadata { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 24px; margin: 0; }
+.external-review-metadata > div { min-width: 0; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.external-review-metadata dt { margin-bottom: 5px; color: var(--olive); font-size: 9px; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.external-review-metadata dd { overflow-wrap: anywhere; margin: 0; color: var(--ink); font-family: Georgia, serif; font-size: 15px; line-height: 1.35; }
+.external-review-note { grid-column: 1 / -1; margin: 0; color: var(--ink-soft); font-size: 11px; line-height: 1.5; }
+.external-review-actions { display: flex; grid-column: 1 / -1; justify-content: flex-end; gap: 9px; padding-top: 18px; border-top: 1px solid var(--line); }
+
+@media (max-width: 900px) {
+  .external-book-review { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 680px) {
+  .catalog-item { grid-template-columns: 60px minmax(0, 1fr); align-items: start; gap: 12px; }
+  .catalog-item > .button { grid-column: 1 / -1; }
+  .external-book-review { grid-template-columns: 1fr; gap: 20px; margin: 2px -14px -14px; padding: 22px 14px 18px; }
+  .external-review-metadata { grid-template-columns: 1fr; gap: 12px; }
+  .external-review-actions { flex-direction: column-reverse; }
+}

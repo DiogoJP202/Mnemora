@@ -6,6 +6,57 @@ import { apiGet, apiWrite } from "@/lib/api";
 import { BookCover } from "@/components/reader/book-cover";
 import type { Book, LibraryBook, SearchBook } from "@/lib/reader-types";
 
+const languageNames: Record<string, string> = {
+  de: "Alemão",
+  deu: "Alemão",
+  eng: "Inglês",
+  en: "Inglês",
+  es: "Espanhol",
+  spa: "Espanhol",
+  fr: "Francês",
+  fra: "Francês",
+  it: "Italiano",
+  ita: "Italiano",
+  por: "Português",
+  pt: "Português",
+  "pt-br": "Português (Brasil)",
+};
+
+function actionKey(book: SearchBook) {
+  return book.id ?? `${book.externalProvider}:${book.externalId}`;
+}
+
+function publicationYear(publishedDate: string | null) {
+  return publishedDate?.match(/^\d{4}/)?.[0] ?? null;
+}
+
+function languageName(language: string | null) {
+  if (!language) return null;
+  return languageNames[language.trim().toLowerCase()] ?? language;
+}
+
+function preferredIsbn(book: SearchBook) {
+  return book.isbn13 ?? book.isbn10;
+}
+
+function metadataRows(book: SearchBook) {
+  const year = publicationYear(book.publishedDate);
+  const language = languageName(book.language);
+  return [
+    { label: "Título", value: book.title },
+    { label: "Subtítulo", value: book.subtitle },
+    { label: "Autoria", value: book.author },
+    { label: "Editora", value: book.publisher },
+    { label: "Publicação", value: year },
+    { label: "Idioma", value: language },
+    { label: "ISBN-13", value: book.isbn13 },
+    { label: "ISBN-10", value: book.isbn10 },
+    { label: "Edição", value: book.edition },
+    { label: "Extensão", value: book.pageCount ? `${book.pageCount} páginas` : null },
+    { label: "Categorias", value: book.categories?.length ? book.categories.join(", ") : null },
+  ].filter((row): row is { label: string; value: string } => Boolean(row.value));
+}
+
 export function BookSearch() {
   const router = useRouter();
   const [query, setQuery] = useState("");
@@ -13,6 +64,7 @@ export function BookSearch() {
   const [searched, setSearched] = useState(false);
   const [searching, setSearching] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [reviewingKey, setReviewingKey] = useState<string | null>(null);
   const [libraryBookIds, setLibraryBookIds] = useState<Set<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [manualOpen, setManualOpen] = useState(false);
@@ -22,6 +74,8 @@ export function BookSearch() {
   const [manualError, setManualError] = useState<string | null>(null);
   const [libraryWarning, setLibraryWarning] = useState<string | null>(null);
   const manualTitleRef = useRef<HTMLInputElement>(null);
+  const reviewHeadingRef = useRef<HTMLHeadingElement>(null);
+  const reviewTriggerRefs = useRef(new Map<string, HTMLButtonElement>());
   const searchSequence = useRef(0);
 
   useEffect(() => {
@@ -39,8 +93,17 @@ export function BookSearch() {
             externalProvider: null,
             source: "local" as const,
             title: book.title,
+            subtitle: book.subtitle,
             author: book.author,
             coverUrl: book.coverUrl,
+            publisher: book.publisher,
+            publishedDate: book.publishedDate,
+            language: book.language,
+            isbn10: book.isbn10,
+            isbn13: book.isbn13,
+            pageCount: null,
+            categories: [],
+            edition: null,
             memoryPackAvailable: book.memoryPackAvailable,
           })));
         } else {
@@ -62,6 +125,10 @@ export function BookSearch() {
     if (manualOpen) manualTitleRef.current?.focus();
   }, [manualOpen]);
 
+  useEffect(() => {
+    if (reviewingKey) reviewHeadingRef.current?.focus();
+  }, [reviewingKey]);
+
   async function search(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const term = query.trim();
@@ -69,6 +136,7 @@ export function BookSearch() {
     const sequence = ++searchSequence.current;
     setSearched(true);
     setSearching(true);
+    setReviewingKey(null);
     setResults(null);
     setError(null);
     try {
@@ -84,7 +152,7 @@ export function BookSearch() {
   }
 
   async function add(book: SearchBook) {
-    const key = book.id ?? `${book.externalProvider}:${book.externalId}`;
+    const key = actionKey(book);
     if (!key) return;
     setBusy(key);
     setError(null);
@@ -101,6 +169,11 @@ export function BookSearch() {
       setError(cause instanceof Error ? cause.message : "Não foi possível adicionar o livro.");
       setBusy(null);
     }
+  }
+
+  function closeReview(key: string) {
+    setReviewingKey(null);
+    requestAnimationFrame(() => reviewTriggerRefs.current.get(key)?.focus());
   }
 
   async function addManual(event: React.FormEvent<HTMLFormElement>) {
@@ -132,35 +205,240 @@ export function BookSearch() {
     ? error
     : !results
       ? "Procurando histórias."
-    : results.length === 0
-      ? "Nenhum livro encontrado."
-      : `${results.length} ${results.length === 1 ? "livro encontrado" : "livros encontrados"}.`;
+      : results.length === 0
+        ? "Nenhum livro encontrado."
+        : `${results.length} ${results.length === 1 ? "livro encontrado" : "livros encontrados"}.`;
 
   return (
     <div className="reader-page">
-      <div className="reader-page-head"><div><span className="section-index">SUA PRÓXIMA LEITURA</span><h1>Adicione um livro<br /><em>à sua estante.</em></h1><p>Busque pelo título, autor ou ISBN. Se ele não aparecer, cadastre os dados básicos.</p></div></div>
-      <form className="catalog-search" onSubmit={search} role="search" aria-busy={searching}><label htmlFor="book-query">Buscar livros</label><div><span aria-hidden="true">⌕</span><input id="book-query" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Título, autor ou ISBN…" autoComplete="off" maxLength={100} /><button type="submit" disabled={!query.trim() || !!busy || searching}>{searching ? "Buscando…" : "Buscar"} <span aria-hidden="true">↗</span></button></div></form>
+      <div className="reader-page-head">
+        <div>
+          <span className="section-index">SUA PRÓXIMA LEITURA</span>
+          <h1>Adicione um livro<br /><em>à sua estante.</em></h1>
+          <p>Busque pelo título, autor ou ISBN. Se ele não aparecer, cadastre os dados básicos.</p>
+        </div>
+      </div>
+
+      <form className="catalog-search" onSubmit={search} role="search" aria-busy={searching}>
+        <label htmlFor="book-query">Buscar livros</label>
+        <div>
+          <span aria-hidden="true">⌕</span>
+          <input
+            id="book-query"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Título, autor ou ISBN…"
+            autoComplete="off"
+            maxLength={100}
+          />
+          <button type="submit" disabled={!query.trim() || !!busy || searching}>
+            {searching ? "Buscando…" : "Buscar"} <span aria-hidden="true">↗</span>
+          </button>
+        </div>
+      </form>
+
       <div className="sr-only" aria-live="polite" aria-atomic="true">{resultMessage}</div>
       {error && <div className="form-alert" role="alert">{error}</div>}
       {libraryWarning && <div className="form-alert" role="status">{libraryWarning}</div>}
-      <div className="library-count"><span>{searched ? "RESULTADOS DA BUSCA" : "LIVROS DO CATÁLOGO"}</span><span className="library-rule" /></div>
+      <div className="library-count">
+        <span>{searched ? "RESULTADOS DA BUSCA" : "LIVROS DO CATÁLOGO"}</span>
+        <span className="library-rule" />
+      </div>
+
       {!results && !error && <div className="search-loading" role="status">Procurando histórias…</div>}
-      {results?.length === 0 && <div className="empty-state compact"><div className="empty-symbol" aria-hidden="true">⌕</div><h2>Nenhum livro encontrado.</h2><p>Revise a busca ou adicione o livro manualmente logo abaixo.</p></div>}
-      {!!results?.length && <div className="catalog-list">{results.map((book) => {
-        const key = `${book.source}:${book.id ?? `${book.externalProvider}:${book.externalId}`}`;
-        const isAdded = !!book.id && libraryBookIds.has(book.id);
-        const canAdd = !!book.id || (!!book.externalId && !!book.externalProvider);
-        return <article className="catalog-item" key={key}><BookCover title={book.title} coverUrl={book.coverUrl} /><div className="catalog-info"><div className="catalog-labels"><span className="book-status">{book.source === "external" ? "CATÁLOGO EXTERNO" : "CATÁLOGO MNEMORA"}</span><span className={`pack-label${book.memoryPackAvailable ? " pack-label-ready" : ""}`}>{book.memoryPackAvailable ? "MEMÓRIA DISPONÍVEL" : "SOMENTE ESTANTE"}</span></div><h2>{book.title}</h2><p>{book.author}</p></div><button className="button button-outline" type="button" onClick={() => void add(book)} disabled={!!busy || !canAdd || isAdded}>{isAdded ? "Já adicionado" : busy === (book.id ?? `${book.externalProvider}:${book.externalId}`) ? "Adicionando…" : "Adicionar"} {!isAdded && <span aria-hidden="true">＋</span>}</button></article>;
-      })}</div>}
+      {results?.length === 0 && (
+        <div className="empty-state compact">
+          <div className="empty-symbol" aria-hidden="true">⌕</div>
+          <h2>Nenhum livro encontrado.</h2>
+          <p>Revise a busca ou adicione o livro manualmente logo abaixo.</p>
+        </div>
+      )}
+
+      {!!results?.length && (
+        <div className="catalog-list">
+          {results.map((book, index) => {
+            const key = actionKey(book);
+            const renderKey = `${book.source}:${key}`;
+            const reviewId = `external-book-review-${index}`;
+            const reviewTitleId = `${reviewId}-title`;
+            const isAdded = !!book.id && libraryBookIds.has(book.id);
+            const canAdd = !!book.id || (!!book.externalId && !!book.externalProvider);
+            const isReviewing = book.source === "external" && reviewingKey === key;
+            const year = publicationYear(book.publishedDate);
+            const language = languageName(book.language);
+            const isbn = preferredIsbn(book);
+            const publisherAndYear = [book.publisher, year].filter(Boolean).join(" • ");
+            const details = metadataRows(book);
+
+            return (
+              <article className={`catalog-item${isReviewing ? " catalog-item-reviewing" : ""}`} key={renderKey}>
+                <BookCover title={book.title} coverUrl={book.coverUrl} />
+                <div className="catalog-info">
+                  <div className="catalog-labels">
+                    <span className="book-status">
+                      {book.source === "external" ? "CATÁLOGO EXTERNO" : "CATÁLOGO MNEMORA"}
+                    </span>
+                    <span className={`pack-label${book.memoryPackAvailable ? " pack-label-ready" : ""}`}>
+                      {book.memoryPackAvailable ? "MEMÓRIA DISPONÍVEL" : "SOMENTE ESTANTE"}
+                    </span>
+                  </div>
+                  <h2>{book.title}</h2>
+                  {book.subtitle && <p className="catalog-subtitle">{book.subtitle}</p>}
+                  <p className="catalog-author">{book.author}</p>
+                  {(publisherAndYear || language || isbn) && (
+                    <div className="catalog-bibliography" aria-label="Dados desta edição">
+                      {publisherAndYear && <span>{publisherAndYear}</span>}
+                      {language && <span>{language}</span>}
+                      {isbn && <span>ISBN {isbn}</span>}
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="button button-outline"
+                  type="button"
+                  ref={book.source === "external" ? (node) => {
+                    if (node) reviewTriggerRefs.current.set(key, node);
+                    else reviewTriggerRefs.current.delete(key);
+                  } : undefined}
+                  aria-expanded={book.source === "external" ? isReviewing : undefined}
+                  aria-controls={book.source === "external" && isReviewing ? reviewId : undefined}
+                  onClick={() => {
+                    if (book.source === "external") {
+                      setError(null);
+                      setReviewingKey((current) => current === key ? null : key);
+                    } else {
+                      void add(book);
+                    }
+                  }}
+                  disabled={!!busy || !canAdd || isAdded}
+                >
+                  {isAdded
+                    ? "Já adicionado"
+                    : busy === key
+                      ? "Adicionando…"
+                      : book.source === "external"
+                        ? isReviewing ? "Fechar revisão" : "Revisar edição"
+                        : "Adicionar"}
+                  {!isAdded && <span aria-hidden="true">{isReviewing ? "−" : "＋"}</span>}
+                </button>
+
+                {isReviewing && (
+                  <section className="external-book-review" id={reviewId} aria-labelledby={reviewTitleId}>
+                    <div className="external-review-intro">
+                      <span className="section-index">CONFIRME A EDIÇÃO</span>
+                      <h3 id={reviewTitleId} ref={reviewHeadingRef} tabIndex={-1}>
+                        Revise antes de adicionar.
+                      </h3>
+                      <p>Confira se estes dados correspondem à edição que você quer guardar.</p>
+                    </div>
+                    <dl className="external-review-metadata">
+                      {details.map((detail) => (
+                        <div key={detail.label}>
+                          <dt>{detail.label}</dt>
+                          <dd>{detail.value}</dd>
+                        </div>
+                      ))}
+                    </dl>
+                    <p className="external-review-note">
+                      Os dados bibliográficos vêm do catálogo externo e não podem ser alterados nesta etapa.
+                    </p>
+                    <div className="external-review-actions">
+                      <button
+                        className="button button-outline"
+                        type="button"
+                        onClick={() => closeReview(key)}
+                        disabled={!!busy}
+                      >
+                        Voltar
+                      </button>
+                      <button
+                        className="button button-ink"
+                        type="button"
+                        onClick={() => void add(book)}
+                        disabled={!!busy}
+                      >
+                        {busy === key ? "Adicionando…" : "Confirmar e adicionar"}
+                        <span aria-hidden="true">↗</span>
+                      </button>
+                    </div>
+                  </section>
+                )}
+              </article>
+            );
+          })}
+        </div>
+      )}
+
       <section className={`manual-book${manualOpen ? " manual-book-open" : ""}`} aria-labelledby="manual-book-title">
-        <div className="manual-book-intro"><div><span className="section-index">NÃO ENCONTROU?</span><h2 id="manual-book-title">Coloque seu livro na estante.</h2><p>Cadastre o título e, se souber, o autor e o ISBN. Você poderá acompanhar o status, a página e suas notas.</p></div><button type="button" className="button button-outline" aria-expanded={manualOpen} aria-controls="manual-book-form" disabled={!!busy} onClick={() => { setManualOpen((open) => !open); setManualError(null); }}>{manualOpen ? "Fechar formulário" : "Adicionar manualmente"} <span aria-hidden="true">{manualOpen ? "−" : "＋"}</span></button></div>
-        {manualOpen && <form id="manual-book-form" className="manual-book-form" onSubmit={addManual}>
-          {manualError && <div className="form-alert" role="alert">{manualError}</div>}
-          <div className="field"><label htmlFor="manual-title">Título</label><input ref={manualTitleRef} id="manual-title" value={manualTitle} onChange={(event) => setManualTitle(event.target.value)} required maxLength={300} autoComplete="off" placeholder="Ex.: Dom Casmurro" /></div>
-          <div className="field"><label htmlFor="manual-author">Autor <span>(opcional)</span></label><input id="manual-author" value={manualAuthor} onChange={(event) => setManualAuthor(event.target.value)} maxLength={300} autoComplete="off" placeholder="Ex.: Machado de Assis" /></div>
-          <div className="field"><label htmlFor="manual-isbn">ISBN <span>(opcional)</span></label><input id="manual-isbn" value={manualIsbn} onChange={(event) => setManualIsbn(event.target.value)} maxLength={32} autoComplete="off" placeholder="ISBN-10 ou ISBN-13" aria-describedby="manual-isbn-help" /><span id="manual-isbn-help" className="field-help">Você encontra esse número na ficha catalográfica ou no código de barras.</span></div>
-          <button className="button button-ink" type="submit" disabled={!!busy || !manualTitle.trim()}>{busy === "manual" ? "Adicionando…" : "Adicionar à minha estante"} <span aria-hidden="true">↗</span></button>
-        </form>}
+        <div className="manual-book-intro">
+          <div>
+            <span className="section-index">NÃO ENCONTROU?</span>
+            <h2 id="manual-book-title">Coloque seu livro na estante.</h2>
+            <p>Cadastre o título e, se souber, o autor e o ISBN. Você poderá acompanhar o status, a página e suas notas.</p>
+          </div>
+          <button
+            type="button"
+            className="button button-outline"
+            aria-expanded={manualOpen}
+            aria-controls="manual-book-form"
+            disabled={!!busy}
+            onClick={() => {
+              setManualOpen((open) => !open);
+              setManualError(null);
+            }}
+          >
+            {manualOpen ? "Fechar formulário" : "Adicionar manualmente"}
+            <span aria-hidden="true">{manualOpen ? "−" : "＋"}</span>
+          </button>
+        </div>
+        {manualOpen && (
+          <form id="manual-book-form" className="manual-book-form" onSubmit={addManual}>
+            {manualError && <div className="form-alert" role="alert">{manualError}</div>}
+            <div className="field">
+              <label htmlFor="manual-title">Título</label>
+              <input
+                ref={manualTitleRef}
+                id="manual-title"
+                value={manualTitle}
+                onChange={(event) => setManualTitle(event.target.value)}
+                required
+                maxLength={300}
+                autoComplete="off"
+                placeholder="Ex.: Dom Casmurro"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="manual-author">Autor <span>(opcional)</span></label>
+              <input
+                id="manual-author"
+                value={manualAuthor}
+                onChange={(event) => setManualAuthor(event.target.value)}
+                maxLength={300}
+                autoComplete="off"
+                placeholder="Ex.: Machado de Assis"
+              />
+            </div>
+            <div className="field">
+              <label htmlFor="manual-isbn">ISBN <span>(opcional)</span></label>
+              <input
+                id="manual-isbn"
+                value={manualIsbn}
+                onChange={(event) => setManualIsbn(event.target.value)}
+                maxLength={32}
+                autoComplete="off"
+                placeholder="ISBN-10 ou ISBN-13"
+                aria-describedby="manual-isbn-help"
+              />
+              <span id="manual-isbn-help" className="field-help">
+                Você encontra esse número na ficha catalográfica ou no código de barras.
+              </span>
+            </div>
+            <button className="button button-ink" type="submit" disabled={!!busy || !manualTitle.trim()}>
+              {busy === "manual" ? "Adicionando…" : "Adicionar à minha estante"}
+              <span aria-hidden="true">↗</span>
+            </button>
+          </form>
+        )}
       </section>
     </div>
   );

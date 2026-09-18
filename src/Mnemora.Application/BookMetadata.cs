@@ -3,7 +3,9 @@ namespace Mnemora.Application;
 public sealed record ExternalBookMetadata(
     string Provider, string ExternalId, string Title, string Author, string? CoverUrl,
     string? Isbn10, string? Isbn13, string? Publisher, DateOnly? PublishedDate,
-    string? Language);
+    string? Language, string? Subtitle = null, int? PageCount = null,
+    IReadOnlyList<string>? Categories = null, string? Edition = null,
+    string? WorkId = null);
 
 public static class BookMetadataProviders
 {

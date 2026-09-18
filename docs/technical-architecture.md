@@ -32,7 +32,7 @@ flowchart LR
 
 O produto é um monólito modular com dois processos no desenvolvimento local. O Next.js atende `http://localhost:3000`; o ASP.NET Core atende `http://localhost:5100`. O rewrite de `/api/:path*` mantém as chamadas do navegador na origem do frontend, inclusive cookies e antiforgery. Em uma implantação, o mesmo contrato exige que o proxy preserve `/api` na mesma origem pública.
 
-Não há cache distribuído, fila ou serviço de IA. O estado persistente fica no SQLite. A Open Library é o provider externo padrão e funciona sem chave; o Google Books é uma fonte adicional quando `GOOGLE_BOOKS_API_KEY` está configurada. Ambos fornecem somente metadados bibliográficos.
+Não há cache distribuído, fila ou serviço de IA. O estado persistente fica no SQLite. A Open Library é o provider externo padrão e funciona sem chave; o Google Books é uma fonte adicional quando `GOOGLE_BOOKS_API_KEY` está configurada. Ambos fornecem somente metadados bibliográficos. Um `IMemoryCache` local guarda por quatro horas apenas respostas públicas de pesquisa dos providers; dados de usuário continuam fora de qualquer cache compartilhado ou da PWA.
 
 ## Organização do repositório e dependências
 
@@ -66,7 +66,7 @@ erDiagram
     LoreEntity ||--o{ UserRecallActivity : revisoes
 ```
 
-- `Book` guarda catálogo, autoria, capa, ISBN e identificadores externos. `CatalogKind` distingue `Curated`, `Imported` e `Private`; somente o tipo privado possui `OwnerUserId`. A combinação de provider e identificador externo é única, e ISBNs de livros privados são únicos por proprietário.
+- `Book` guarda título, subtítulo, autoria, capa, ISBN-10/ISBN-13, editora, data de publicação, idioma e identificadores externos. `CatalogKind` distingue `Curated`, `Imported` e `Private`; somente o tipo privado possui `OwnerUserId`. A combinação de provider e identificador externo é única, e ISBNs normalizados de livros privados são únicos por proprietário. Página total, categorias e rótulo de edição são dados transitórios da busca, sem novas colunas persistentes.
 - `ReadingUnit` representa parte, capítulo, seção ou subseção. `OrderIndex` é absoluto e único dentro do livro; `ParentUnitId` cria a hierarquia. `SafeLabel` pode ser mostrado antes da unidade, enquanto `Title` só é exposto depois da fronteira.
 - `UserBook` registra posse na biblioteca, status, unidade atual e página informativa. A combinação de usuário e livro é única.
 - `LoreEntity` representa personagem, facção, lugar, criatura, item, evento, organização ou conceito. `FirstKnownAtUnitId` libera nome, descrição curta e imagem. Eventos podem usar `ChronologyIndex`, independente da ordem de leitura.
@@ -122,9 +122,11 @@ Todas as mutações `POST`, `PUT`, `PATCH` e `DELETE` sob `/api` passam pela val
 
 Os endpoints de biblioteca, lore, notas e revisão exigem autenticação. Consultas partem do identificador da sessão e filtram propriedade; IDs pertencentes a outro usuário são tratados como não encontrados. `/api/admin` requer a role `Admin`. Credenciais administrativas não ficam no repositório: o seed lê `ADMIN_EMAIL` e `ADMIN_PASSWORD` do ambiente. Se o e-mail já existir, a promoção só ocorre quando a senha configurada corresponde à conta; resultados de criação da role e atribuição também são verificados.
 
-Um middleware aplica `Cache-Control: no-store` a toda resposta sob `/api`. O cliente também usa `fetch` com `cache: "no-store"` e `credentials: "same-origin"`. CORS permite apenas a origem configurada em `Mnemora:WebOrigin`. Os providers externos têm timeout; a composição consulta as fontes configuradas, combina resultados e tolera falha parcial. A importação persiste título, autor, capa e dados bibliográficos, mas nunca a descrição do provider, que pode conter spoilers. `OPEN_LIBRARY_CONTACT` pode definir o contato do `User-Agent` enviado à Open Library; sem a variável, usa-se a URL pública do repositório. Cada usuário pode manter até 200 notas por livro, e a revisão conserva as 500 atividades mais recentes por usuário e livro. Essas escritas são serializadas no processo, de acordo com a implantação SQLite de instância única prevista para o MVP.
+Um middleware aplica `Cache-Control: no-store` a toda resposta sob `/api`. O cliente também usa `fetch` com `cache: "no-store"` e `credentials: "same-origin"`. CORS permite apenas a origem configurada em `Mnemora:WebOrigin`. Os providers externos têm timeout; a composição consulta as fontes configuradas, combina resultados, tolera falha parcial e elimina duplicatas na ordem ISBN-13, ISBN-10 e provider/ID. ISBNs formatados são validados e convertidos para a forma canônica antes de uma consulta exata.
 
-O catálogo público (`GET /api/books`) contém apenas livros curados. A busca local inclui livros curados, importados compartilháveis e os cadastros privados do usuário atual. O detalhe e a inclusão na biblioteca tratam o livro privado de outro usuário como inexistente. Livros importados são reutilizados pelo par provider/ID; livros manuais são deduplicados somente dentro da conta proprietária.
+Resultados externos bem-sucedidos ficam no `IMemoryCache` por quatro horas, indexados somente pela consulta normalizada. A API continua executando a pesquisa local e a autorização do usuário em cada requisição; sessão, catálogo privado, biblioteca e progresso não entram nesse cache. A importação persiste somente título, subtítulo, autor, capa, ISBN-10/ISBN-13, editora, data de publicação e idioma. Página total, categorias e rótulo de edição são exibidos na seleção, mas não gravados. Descrições e sinopses eventualmente devolvidas pelos providers não entram no contrato de metadados, no DTO ou no banco, pois podem conter spoilers. `OPEN_LIBRARY_CONTACT` pode definir o contato do `User-Agent` enviado à Open Library; sem a variável, usa-se a URL pública do repositório. Cada usuário pode manter até 200 notas por livro, e a revisão conserva as 500 atividades mais recentes por usuário e livro. Essas escritas são serializadas no processo, de acordo com a implantação SQLite de instância única prevista para o MVP.
+
+O catálogo público (`GET /api/books`) contém apenas livros curados. A busca local inclui livros curados, importados compartilháveis e os cadastros privados do usuário atual. O detalhe e a inclusão na biblioteca tratam o livro privado de outro usuário como inexistente. Livros importados são reutilizados pelo par provider/ID; livros manuais são deduplicados somente dentro da conta proprietária. O frontend não permite alterações individuais nos metadados compartilhados: ele mostra uma confirmação somente leitura e envia o provider/ID escolhido apenas depois da ação explícita do leitor.
 
 O Next.js envia Content Security Policy, `X-Content-Type-Options`, `X-Frame-Options`, política de referrer, Permissions Policy e HSTS. Em produção, o proxy deve terminar TLS, preservar a mesma origem pública e ser cadastrado explicitamente em `Mnemora:KnownProxies`; a API só então usa `X-Forwarded-For` e `X-Forwarded-Proto` para esquema, cookies e partições de rate limit.
 
@@ -133,8 +135,8 @@ O Next.js envia Content Security Policy, `X-Content-Type-Options`, `X-Frame-Opti
 ### Leitor
 
 1. O usuário se cadastra ou entra e recebe a sessão HttpOnly.
-2. A busca consulta o catálogo local e a Open Library; se houver `GOOGLE_BOOKS_API_KEY`, também consulta o Google Books.
-3. Um resultado externo é adicionado com `POST /api/library/external` e `{ "externalProvider": "...", "externalId": "..." }`; a operação reutiliza o livro importado quando ele já existe.
+2. A busca consulta o catálogo local e a Open Library; se houver `GOOGLE_BOOKS_API_KEY`, também consulta o Google Books. Um ISBN válido favorece a consulta exata, e resultados de fontes diferentes são deduplicados sem comparar apenas título e autor.
+3. O leitor abre a confirmação de um resultado externo, confere os dados da edição e confirma a inclusão. Só então o frontend chama `POST /api/library/external` com `{ "externalProvider": "...", "externalId": "..." }`; a operação reutiliza o livro importado quando ele já existe.
 4. Se o livro não for encontrado, `POST /api/library/manual` aceita título obrigatório, autor opcional e ISBN opcional e cria um registro privado para o leitor.
 5. O leitor escolhe a unidade alcançada quando existe um pack; a página, quando informada, não muda o conhecimento.
 6. Livros com pack oferecem personagens, facções, lugares, timeline, detalhe e Recall projetados para a ordem atual.
@@ -172,6 +174,7 @@ Os prefixos `/api`, `/app` e `/admin` saem imediatamente do handler sem consulta
 - Em desenvolvimento, a API aplica migrations ao iniciar. Em outros ambientes, a atualização deve ser executada explicitamente antes da aplicação, ou por um processo de release controlado.
 - Cada proxy reverso confiável deve ter seu IP configurado em `Mnemora:KnownProxies`; headers encaminhados de proxies desconhecidos não devem participar das decisões de segurança.
 - Livros importados e manuais não recebem unidades ou lore automaticamente. Sem um memory pack, a interface mantém status, página e notas e oculta a navegação de personagens, lugares, timeline, Recall e revisão.
+- O cache de pesquisas externas é local a cada processo e pode ser descartado em reinícios. Ele reduz chamadas repetidas, mas não coordena múltiplas instâncias.
 - A segurança antisspoiler depende da curadoria de `ShortDescription` e `ImageUrl` para o primeiro ponto de conhecimento e da marcação correta de cada revelação. As validações impedem inconsistência temporal estrutural, mas não avaliam semanticamente o texto escrito por um Admin.
 - A PWA oferece o shell público offline. A área autenticada exige rede de propósito, para que progresso retrocedido e dados privados nunca sejam servidos de um cache local antigo.
 - Recuperação de senha, busca semântica, geração por IA e repetição espaçada são extensões futuras e não fazem parte deste MVP.

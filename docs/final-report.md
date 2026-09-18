@@ -4,7 +4,7 @@
 
 O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, busca externa, cadastro manual de livros, biblioteca, progresso por unidade, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo. A regra antisspoiler permanece no backend e impede que dados futuros sejam enviados ao frontend.
 
-Este relatório foi atualizado em 18 de setembro de 2026. O histórico abaixo foi confirmado na branch `main` até a fase 12, commit `9eb427b`, já sincronizado com `origin/main`. A fase 13 está documentada neste mesmo commit, criado depois das verificações finais.
+Este relatório foi atualizado em 18 de setembro de 2026. O histórico abaixo foi confirmado na branch `main` até a fase 13, commit `f6841c9`, já sincronizado com `origin/main`. A fase 14 corresponde às alterações identificadas abaixo como `este commit`; suas evidências quantitativas serão preenchidas depois da execução dos gates finais.
 
 ## Histórico por fase
 
@@ -23,15 +23,18 @@ Este relatório foi atualizado em 18 de setembro de 2026. O histórico abaixo fo
 | 10 — Qualidade e entrega | `e1f2347` | Revisão completa, documentação técnica, instruções de operação, limitações e relatório final |
 | 11 — Preparação do deploy | `85b2c2a` | Container de produção, Blueprint do Render, health check e documentação operacional |
 | 12 — Demonstração gratuita | `9eb427b` | Render gratuito sem cartão, aviso de dados efêmeros e seed sem Admin obrigatório |
-| 13 — Livros do leitor | este commit | Open Library sem chave, Google Books opcional, cadastro manual privado e experiência para livros sem pack |
+| 13 — Livros do leitor | `f6841c9` | Open Library sem chave, Google Books opcional, cadastro manual privado e experiência para livros sem pack |
+| 14 — Metadados por edição | este commit | Metadados bibliográficos ricos, ISBN canônico, deduplicação entre providers, confirmação da edição e cache externo de quatro horas |
 
 ## Funcionalidades entregues
 
 ### Produto para o leitor
 
 - cadastro, login, logout e sessão por cookie HttpOnly;
-- catálogo local e busca externa pela Open Library sem chave, com Google Books opcional;
-- importação idempotente e reutilizável pelo par provider/identificador, sem descrição externa potencialmente reveladora;
+- catálogo local e busca externa pela Open Library sem chave, com Google Books opcional e resultados diferenciados por edição;
+- metadados ricos na busca e confirmação somente leitura antes da importação externa;
+- normalização de ISBN e deduplicação entre providers por ISBN-13, ISBN-10 ou provider/identificador;
+- importação idempotente e reutilizável pelo par provider/identificador, sem descrição ou sinopse externa potencialmente reveladora;
 - cadastro manual de livro privado ao leitor, com título obrigatório e autor/ISBN opcionais;
 - biblioteca privada, status de leitura, progresso por unidade e página informativa;
 - uso de status, página e notas mesmo quando o livro não possui memory pack;
@@ -58,6 +61,7 @@ Este relatório foi atualizado em 18 de setembro de 2026. O histórico abaixo fo
 - respostas `/api` com `Cache-Control: no-store`;
 - mutações protegidas por antiforgery;
 - rate limit de autenticação, Recall, integração externa e escritas de notas/revisão;
+- cache em memória por quatro horas apenas para resultados públicos de busca externa, sem dados de usuário;
 - limite de 200 notas por usuário e livro e retenção das 500 atividades de revisão mais recentes por usuário e livro;
 - `401`/`403` para API sem redirects HTML;
 - isolamento por sessão para biblioteca, livros manuais, progresso, notas e revisão;
@@ -90,6 +94,8 @@ As verificações finais da fase 10 produziram estes resultados:
 Os 28 testes .NET incluem os casos críticos pedidos no aceite: antes, exatamente no ponto e depois da revelação; ausência de progresso; entidade, alias, fato, relação e evento futuros; avanço e retrocesso; título neutro; termo futuro no Recall; biblioteca e notas de outro usuário; limite de cinco itens na revisão; quotas de notas e histórico de revisão; role Admin; consistência de reordenação; preview com projeção segura; rejeição de escrita sem antiforgery; persistência das chaves de proteção quando configurada; e impossibilidade de promover uma conta existente com senha divergente durante o seed.
 
 A fase 13 acrescenta testes de providers, importação por provider, privacidade do cadastro manual, deduplicação e uso de livros sem pack. Os totais da tabela anterior permanecem como registro da fase 10.
+
+A fase 14 amplia os contratos de metadados e a experiência de seleção de edição. As evidências quantitativas desta fase devem ser registradas somente após a execução dos respectivos comandos; as tabelas anteriores permanecem como histórico factual das fases já verificadas.
 
 ### Evidências da fase 13
 
@@ -147,7 +153,7 @@ Abra `http://localhost:3000`. O rewrite padrão encaminha `/api` para a API loca
 ### 4. Validar a jornada do leitor
 
 1. Cadastre um leitor e adicione `O Arquivo da Neblina` à biblioteca.
-2. Busque outro livro por título, autor ou ISBN, importe um resultado da Open Library e confirme que status, página e notas ficam disponíveis sem lore.
+2. Busque outro livro por título, autor ou um ISBN formatado. Compare subtítulo, editora, ano, idioma e ISBN, abra a confirmação da edição e verifique que nenhuma importação ocorre antes da confirmação explícita. Depois confirme e valide que status, página e notas ficam disponíveis sem lore.
 3. Cadastre manualmente um livro ausente e confirme, com uma segunda conta, que ele não aparece na busca nem pode ser aberto.
 4. Sem unidade selecionada no pack demonstrativo, confirme que listas de lore, timeline, Recall e revisão não expõem conteúdo.
 5. Marque o Capítulo 1 e confirme que Nara aparece exatamente nessa fronteira.
@@ -184,6 +190,7 @@ Para verificar a PWA em condições reais de service worker, execute o build de 
 - Busca semântica, geração por IA e enriquecimento automático de lore não estão implementados.
 - A revisão registra feedback, mas não agenda cartões nem implementa repetição espaçada.
 - A Open Library funciona sem chave; o Google Books só participa quando `GOOGLE_BOOKS_API_KEY` está configurada.
+- Número de páginas, categorias e rótulo de edição são usados na busca e confirmação, mas não são persistidos no modelo atual de `Book`.
 - Um livro importado ou manual traz somente metadados, não um pack de lore. Ele permite status, página e notas; a navegação de lore permanece indisponível até existir curadoria administrativa.
 - SQLite é adequado ao uso local e a uma instância pequena; alta concorrência e múltiplas réplicas pedem outro provider relacional.
 - O shell público pode funcionar offline, mas a área privada exige rede por decisão de segurança e consistência antisspoiler.

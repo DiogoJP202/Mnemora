@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using System.Text.Json;
 using Mnemora.Application;
 using Mnemora.Domain;
@@ -18,7 +19,9 @@ public static class BooksEndpoints
             var rows = await db.Books.AsNoTracking()
                 .Where(x => x.CatalogKind == BookCatalogKind.Curated)
                 .OrderBy(x => x.Title).Take(100)
-                .Select(x => new BookDto(x.Id, x.Title, x.Author, x.Description, x.CoverUrl,
+                .Select(x => new BookDto(x.Id, x.Title, x.Subtitle, x.Author,
+                    x.Description, x.CoverUrl, x.Isbn10, x.Isbn13,
+                    x.Publisher, x.PublishedDate, x.Language,
                     db.ReadingUnits.Any(unit => unit.BookId == x.Id)))
                 .ToListAsync();
             return Results.Ok(rows);
@@ -26,40 +29,59 @@ public static class BooksEndpoints
 
         books.MapGet("/search", async (
             string? q, ClaimsPrincipal user, MnemoraDbContext db,
-            IBookMetadataProvider provider, ILoggerFactory loggerFactory,
+            IBookMetadataProvider provider, IMemoryCache cache,
+            ILoggerFactory loggerFactory,
             CancellationToken cancellationToken) =>
         {
             var query = q?.Trim();
             if (string.IsNullOrWhiteSpace(query)) return Results.Ok(Array.Empty<BookSearchDto>());
             if (query.Length > 100) return Results.BadRequest("Busca muito longa.");
             var term = query.ToLowerInvariant();
-            var isbnTerm = NormalizeIsbnSearch(query);
+            var isbn = BookIsbn.Normalize(query);
             var userId = TryUserId(user);
             var local = await db.Books.AsNoTracking().Where(x =>
                     (x.CatalogKind != BookCatalogKind.Private || x.OwnerUserId == userId)
-                    && (x.Title.ToLower().Contains(term) || x.Author.ToLower().Contains(term)
+                    && (x.Title.ToLower().Contains(term)
+                        || (x.Subtitle != null && x.Subtitle.ToLower().Contains(term))
+                        || x.Author.ToLower().Contains(term)
                         || (x.Isbn10 != null && x.Isbn10.Contains(term))
                         || (x.Isbn13 != null && x.Isbn13.Contains(term))
-                        || (isbnTerm != null && x.Isbn10 != null && x.Isbn10 == isbnTerm)
-                        || (isbnTerm != null && x.Isbn13 != null && x.Isbn13 == isbnTerm)))
+                        || (isbn.Isbn10 != null && x.Isbn10 == isbn.Isbn10)
+                        || (isbn.Isbn13 != null && x.Isbn13 == isbn.Isbn13)))
                 .OrderBy(x => x.Title).Take(20)
                 .Select(x => new BookSearchDto(x.Id, x.ExternalProvider, x.ExternalId, "local",
-                    x.Title, x.Author, x.CoverUrl,
+                    x.Title, x.Subtitle, x.Author, x.CoverUrl,
+                    x.Isbn10, x.Isbn13, x.Publisher, x.PublishedDate, x.Language,
+                    null, null, null,
                     db.ReadingUnits.Any(unit => unit.BookId == x.Id)))
                 .ToListAsync(cancellationToken);
             if (!provider.IsConfigured) return Results.Ok(local);
             try
             {
-                var external = await provider.SearchAsync(query, cancellationToken);
+                var providerQuery = isbn.HasValue ? isbn.Canonical! : query;
+                var cacheKey = $"book-metadata:search:{NormalizeCacheKey(providerQuery)}";
+                var external = await cache.GetOrCreateAsync(cacheKey, async entry =>
+                {
+                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(4);
+                    entry.Size = 1;
+                    return await provider.SearchAsync(providerQuery, cancellationToken);
+                }) ?? [];
                 var externalProviders = external.Select(x => x.Provider).Distinct().ToList();
-                var externalIds = external.Select(x => x.ExternalId).Distinct().ToList();
+                var externalIds = external
+                    .SelectMany(x => new[] { x.ExternalId, x.WorkId })
+                    .Where(x => !string.IsNullOrWhiteSpace(x))
+                    .Select(x => x!)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
                 var knownExternalBooks = await db.Books.AsNoTracking()
                     .Where(x => x.ExternalProvider != null && x.ExternalId != null
                         && (x.CatalogKind != BookCatalogKind.Private || x.OwnerUserId == userId)
                         && externalProviders.Contains(x.ExternalProvider)
                         && externalIds.Contains(x.ExternalId))
                     .Select(x => new BookSearchDto(x.Id, x.ExternalProvider, x.ExternalId,
-                        "local", x.Title, x.Author, x.CoverUrl,
+                        "local", x.Title, x.Subtitle, x.Author, x.CoverUrl,
+                        x.Isbn10, x.Isbn13, x.Publisher, x.PublishedDate, x.Language,
+                        null, null, null,
                         db.ReadingUnits.Any(unit => unit.BookId == x.Id)))
                     .ToListAsync(cancellationToken);
                 var knownByKey = knownExternalBooks.ToDictionary(x =>
@@ -69,15 +91,21 @@ public static class BooksEndpoints
                     .Select(x => x.Id!.Value).ToHashSet();
                 foreach (var item in external)
                 {
-                    if (knownByKey.TryGetValue(ExternalKey(item.Provider, item.ExternalId),
-                            out var known))
+                    knownByKey.TryGetValue(
+                        ExternalKey(item.Provider, item.ExternalId), out var known);
+                    if (known is null && !string.IsNullOrWhiteSpace(item.WorkId))
+                        knownByKey.TryGetValue(
+                            ExternalKey(item.Provider, item.WorkId), out known);
+                    if (known is not null)
                     {
                         if (known.Id is Guid knownId && includedBookIds.Add(knownId))
                             local.Add(known);
                         continue;
                     }
                     local.Add(new BookSearchDto(null, item.Provider, item.ExternalId, "external",
-                        item.Title, item.Author, item.CoverUrl, false));
+                        item.Title, item.Subtitle, item.Author, item.CoverUrl,
+                        item.Isbn10, item.Isbn13, item.Publisher, item.PublishedDate,
+                        item.Language, item.PageCount, item.Categories, item.Edition, false));
                 }
                 return Results.Ok(local);
             }
@@ -152,13 +180,7 @@ public static class BooksEndpoints
     private static string ExternalKey(string provider, string externalId) =>
         $"{provider}\u001f{externalId}";
 
-    private static string? NormalizeIsbnSearch(string query)
-    {
-        var compact = new string(query.Where(character =>
-            character is not '-' and not ' ' && character is not '\t').ToArray())
-            .ToUpperInvariant();
-        return compact.Length is 10 or 13
-            && compact.All(character => character is >= '0' and <= '9' || character == 'X')
-                ? compact : null;
-    }
+    private static string NormalizeCacheKey(string query) =>
+        string.Join(' ', query.Split((char[]?)null,
+            StringSplitOptions.RemoveEmptyEntries)).ToLowerInvariant();
 }

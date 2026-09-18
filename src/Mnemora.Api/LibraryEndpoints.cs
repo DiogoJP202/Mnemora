@@ -68,22 +68,36 @@ public static class LibraryEndpoints
                     statusCode: StatusCodes.Status503ServiceUnavailable);
             }
             if (metadata is null) return Results.NotFound();
-            if (string.IsNullOrWhiteSpace(metadata.Provider)
-                || string.IsNullOrWhiteSpace(metadata.ExternalId))
+            var providerName = metadata.Provider?.Trim();
+            var externalId = metadata.ExternalId?.Trim();
+            var workId = metadata.WorkId?.Trim();
+            var title = NormalizeText(metadata.Title);
+            var author = NormalizeText(metadata.Author) ?? UnknownAuthor;
+            if (string.IsNullOrWhiteSpace(providerName) || providerName.Length > 80
+                || string.IsNullOrWhiteSpace(externalId) || externalId.Length > 200
+                || workId?.Length > 200
+                || title is null || title.Length > 300 || author.Length > 300)
                 return Results.Problem("O catálogo externo retornou dados inválidos.",
                     statusCode: StatusCodes.Status503ServiceUnavailable);
+            var externalIsbn = NormalizeExternalIsbn(metadata.Isbn13, metadata.Isbn10);
             var book = await db.Books.FirstOrDefaultAsync(x =>
-                x.ExternalProvider == metadata.Provider && x.ExternalId == metadata.ExternalId);
+                x.ExternalProvider == providerName && x.ExternalId == externalId);
+            if (book is null && !string.IsNullOrWhiteSpace(workId))
+                book = await db.Books.FirstOrDefaultAsync(x =>
+                    x.ExternalProvider == providerName && x.ExternalId == workId,
+                    cancellationToken);
             if (book is null)
             {
                 book = new Book
                 {
-                    Title = Limit(metadata.Title, 300), Author = Limit(metadata.Author, 300),
-                    CoverUrl = metadata.CoverUrl, Isbn10 = metadata.Isbn10,
-                    Isbn13 = metadata.Isbn13, Publisher = metadata.Publisher,
-                    PublishedDate = metadata.PublishedDate, Language = metadata.Language,
-                    ExternalProvider = Limit(metadata.Provider, 80),
-                    ExternalId = Limit(metadata.ExternalId, 200),
+                    Title = title, Subtitle = LimitOptional(NormalizeText(metadata.Subtitle), 300),
+                    Author = author, CoverUrl = LimitOptional(metadata.CoverUrl?.Trim(), 2_000),
+                    Isbn10 = externalIsbn.Isbn10, Isbn13 = externalIsbn.Isbn13,
+                    Publisher = LimitOptional(NormalizeText(metadata.Publisher), 300),
+                    PublishedDate = metadata.PublishedDate,
+                    Language = LimitOptional(NormalizeText(metadata.Language), 35),
+                    ExternalProvider = providerName,
+                    ExternalId = externalId,
                     CatalogKind = BookCatalogKind.Imported,
                     // External descriptions may contain spoilers, so they are never imported.
                     Description = null
@@ -94,10 +108,18 @@ public static class LibraryEndpoints
                 {
                     db.ChangeTracker.Clear();
                     book = await db.Books.FirstOrDefaultAsync(x =>
-                        x.ExternalProvider == metadata.Provider
-                        && x.ExternalId == metadata.ExternalId, cancellationToken);
+                        x.ExternalProvider == providerName
+                        && x.ExternalId == externalId, cancellationToken);
+                    if (book is null && !string.IsNullOrWhiteSpace(workId))
+                        book = await db.Books.FirstOrDefaultAsync(x =>
+                            x.ExternalProvider == providerName
+                            && x.ExternalId == workId, cancellationToken);
                     if (book is null) throw;
                 }
+            }
+            else if (EnrichImportedBook(book, metadata, externalIsbn))
+            {
+                await db.SaveChangesAsync(cancellationToken);
             }
             var userId = CurrentUser.Id(user);
             var libraryBook = await db.UserBooks.FirstOrDefaultAsync(x =>
@@ -130,7 +152,7 @@ public static class LibraryEndpoints
             if (author.Length > 300)
                 return Results.BadRequest("O autor deve ter no máximo 300 caracteres.");
 
-            var isbn = NormalizeIsbn(request.Isbn);
+            var isbn = BookIsbn.Normalize(request.Isbn);
             if (!isbn.IsValid)
                 return Results.BadRequest("ISBN inválido. Informe um ISBN-10 ou ISBN-13 válido.");
 
@@ -310,6 +332,57 @@ public static class LibraryEndpoints
     private static string Limit(string value, int max) =>
         value.Length <= max ? value : value[..max];
 
+    private static string? LimitOptional(string? value, int max) =>
+        string.IsNullOrWhiteSpace(value) ? null : Limit(value, max);
+
+    private static BookIsbnNormalization NormalizeExternalIsbn(
+        string? isbn13, string? isbn10)
+    {
+        var normalized = BookIsbn.Normalize(isbn13);
+        if (normalized.IsValid && normalized.HasValue) return normalized;
+        normalized = BookIsbn.Normalize(isbn10);
+        return normalized.IsValid && normalized.HasValue
+            ? normalized
+            : new BookIsbnNormalization(true, null, null);
+    }
+
+    private static bool EnrichImportedBook(
+        Book book, ExternalBookMetadata metadata, BookIsbnNormalization isbn)
+    {
+        if (book.CatalogKind != BookCatalogKind.Imported) return false;
+        var changed = false;
+        changed |= SetIfMissing(book.Subtitle,
+            value => book.Subtitle = value,
+            LimitOptional(NormalizeText(metadata.Subtitle), 300));
+        changed |= SetIfMissing(book.CoverUrl,
+            value => book.CoverUrl = value,
+            LimitOptional(metadata.CoverUrl?.Trim(), 2_000));
+        changed |= SetIfMissing(book.Isbn10, value => book.Isbn10 = value, isbn.Isbn10);
+        changed |= SetIfMissing(book.Isbn13, value => book.Isbn13 = value, isbn.Isbn13);
+        changed |= SetIfMissing(book.Publisher,
+            value => book.Publisher = value,
+            LimitOptional(NormalizeText(metadata.Publisher), 300));
+        if (book.PublishedDate is null && metadata.PublishedDate is not null)
+        {
+            book.PublishedDate = metadata.PublishedDate;
+            changed = true;
+        }
+        changed |= SetIfMissing(book.Language,
+            value => book.Language = value,
+            LimitOptional(NormalizeText(metadata.Language), 35));
+        if (changed) book.UpdatedAt = DateTime.UtcNow;
+        return changed;
+    }
+
+    private static bool SetIfMissing(
+        string? current, Action<string> setter, string? candidate)
+    {
+        if (!string.IsNullOrWhiteSpace(current) || string.IsNullOrWhiteSpace(candidate))
+            return false;
+        setter(candidate);
+        return true;
+    }
+
     private static string? NormalizeText(string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return null;
@@ -317,64 +390,7 @@ public static class LibraryEndpoints
             StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private static NormalizedIsbn NormalizeIsbn(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value)) return new(true, null, null);
-        if (value.Length > 32) return new(false, null, null);
-        var compact = new string(value.Where(x => !char.IsWhiteSpace(x) && x != '-').ToArray())
-            .ToUpperInvariant();
-        if (compact.Length == 10 && IsValidIsbn10(compact))
-            return new(true, compact, ToIsbn13(compact));
-        if (compact.Length == 13 && IsValidIsbn13(compact))
-            return new(true, compact.StartsWith("978", StringComparison.Ordinal)
-                ? ToIsbn10(compact) : null, compact);
-        return new(false, null, null);
-    }
-
-    private static bool IsValidIsbn10(string value)
-    {
-        if (value.Length != 10 || value[..9].Any(x => !char.IsDigit(x))
-            || (!char.IsDigit(value[9]) && value[9] != 'X'))
-            return false;
-        var sum = 0;
-        for (var index = 0; index < 10; index++)
-        {
-            var digit = index == 9 && value[index] == 'X' ? 10 : value[index] - '0';
-            sum += (10 - index) * digit;
-        }
-        return sum % 11 == 0;
-    }
-
-    private static bool IsValidIsbn13(string value)
-    {
-        if (value.Length != 13 || value.Any(x => !char.IsDigit(x))) return false;
-        var sum = 0;
-        for (var index = 0; index < 12; index++)
-            sum += (value[index] - '0') * (index % 2 == 0 ? 1 : 3);
-        return (10 - sum % 10) % 10 == value[12] - '0';
-    }
-
-    private static string ToIsbn13(string isbn10)
-    {
-        var body = $"978{isbn10[..9]}";
-        var sum = 0;
-        for (var index = 0; index < body.Length; index++)
-            sum += (body[index] - '0') * (index % 2 == 0 ? 1 : 3);
-        return $"{body}{(10 - sum % 10) % 10}";
-    }
-
-    private static string ToIsbn10(string isbn13)
-    {
-        var body = isbn13.Substring(3, 9);
-        var sum = 0;
-        for (var index = 0; index < body.Length; index++)
-            sum += (body[index] - '0') * (10 - index);
-        var check = (11 - sum % 11) % 11;
-        return $"{body}{(check == 10 ? 'X' : (char)('0' + check))}";
-    }
-
     private sealed record ExternalAddRequest(string ExternalProvider, string ExternalId);
     private sealed record ManualBookRequest(string? Title, string? Author, string? Isbn);
-    private sealed record NormalizedIsbn(bool IsValid, string? Isbn10, string? Isbn13);
     private sealed record StatusWrite(string Status);
 }

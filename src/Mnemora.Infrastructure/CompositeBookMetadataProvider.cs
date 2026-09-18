@@ -27,20 +27,25 @@ public sealed class CompositeBookMetadataProvider(
 
         var results = new List<ExternalBookMetadata>();
         var externalKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var bibliographicKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var isbnKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var attempt in successful)
-        foreach (var item in attempt.Results)
-        {
-            var externalKey = $"{item.Provider}\u001f{item.ExternalId}";
-            var bibliographicKey = $"{item.Title.Trim()}\u001f{item.Author.Trim()}";
-            if (string.IsNullOrWhiteSpace(item.Provider)
-                || string.IsNullOrWhiteSpace(item.ExternalId)
-                || string.IsNullOrWhiteSpace(item.Title)
-                || !externalKeys.Add(externalKey)
-                || !bibliographicKeys.Add(bibliographicKey))
-                continue;
-            results.Add(item);
-        }
+            foreach (var item in attempt.Results)
+            {
+                if (string.IsNullOrWhiteSpace(item.Provider)
+                    || string.IsNullOrWhiteSpace(item.ExternalId)
+                    || string.IsNullOrWhiteSpace(item.Title))
+                    continue;
+
+                var externalKey = $"{item.Provider}\u001f{item.ExternalId}";
+                if (externalKeys.Contains(externalKey)) continue;
+
+                var isbnKey = IsbnKey(item);
+                if (isbnKey is not null && isbnKeys.Contains(isbnKey)) continue;
+
+                externalKeys.Add(externalKey);
+                if (isbnKey is not null) isbnKeys.Add(isbnKey);
+                results.Add(item);
+            }
         return results;
     }
 
@@ -73,4 +78,17 @@ public sealed class CompositeBookMetadataProvider(
 
     private sealed record SearchAttempt(
         IReadOnlyList<ExternalBookMetadata> Results, Exception? Error);
+
+    private static string? IsbnKey(ExternalBookMetadata item)
+    {
+        foreach (var candidate in new[] { item.Isbn13, item.Isbn10 })
+        {
+            var isbn = BookIsbn.Normalize(candidate);
+            if (isbn.IsValid && isbn.HasValue)
+                return isbn.Isbn13 is not null
+                    ? $"ISBN13\u001f{isbn.Isbn13}"
+                    : $"ISBN10\u001f{isbn.Isbn10}";
+        }
+        return null;
+    }
 }

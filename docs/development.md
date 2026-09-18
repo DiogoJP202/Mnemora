@@ -24,18 +24,24 @@ Em produção, mantenha frontend e `/api` na mesma origem e termine TLS no proxy
 
 Os endpoints administrativos usam `/api/admin` e exigem a role Admin. Cada escrita pela interface obtém um token em `GET /api/auth/csrf` e o envia no header `X-CSRF-TOKEN`. O backend devolve 401 sem sessão e 403 para leitor sem role Admin.
 
-Na jornada do leitor, o catálogo curado está em `GET /api/books` e a busca por título, autor ou ISBN em `GET /api/books/search?q=...`. A busca combina o catálogo local com a Open Library, disponível sem chave. `GOOGLE_BOOKS_API_KEY` acrescenta o Google Books como fonte opcional. Os providers têm timeout independente, e uma falha parcial não elimina resultados obtidos pela outra fonte. `OPEN_LIBRARY_CONTACT` pode informar um e-mail ou URL no `User-Agent` das requisições; seu padrão é a URL pública do repositório.
+Na jornada do leitor, o catálogo curado está em `GET /api/books` e a busca por título, subtítulo, autor ou ISBN em `GET /api/books/search?q=...`. A busca combina o catálogo local com a Open Library, disponível sem chave. `GOOGLE_BOOKS_API_KEY` acrescenta o Google Books como fonte opcional. Os providers têm timeout independente, e uma falha parcial não elimina resultados obtidos pela outra fonte. `OPEN_LIBRARY_CONTACT` pode informar um e-mail ou URL no `User-Agent` das requisições; seu padrão é a URL pública do repositório.
 
-A importação de um resultado externo ocorre em `POST /api/library/external` com o corpo abaixo. O valor de `externalProvider` deve ser devolvido pela busca, por exemplo `OpenLibrary` ou `GoogleBooks`. A operação é idempotente pelo par provider/identificador, e o registro importado pode ser reutilizado por outros leitores. O Mnemora importa somente metadados bibliográficos: a descrição externa nunca entra no catálogo, pois pode revelar partes da história.
+Um ISBN formatado com espaços ou hífens passa pela validação compartilhada e é convertido para a forma canônica antes da consulta exata aos providers. ISBN-13 tem prioridade na deduplicação dos resultados, seguido por ISBN-10 e, na ausência de ISBN válido, pelo par provider/identificador externo. Consultas externas bem-sucedidas ficam por quatro horas no `IMemoryCache`; a chave contém apenas a consulta normalizada e o valor contém somente metadados públicos dos providers. Falhas não substituem o fallback entre fontes, e nenhum dado de sessão, biblioteca ou progresso entra nesse cache.
+
+Os resultados externos podem trazer título, subtítulo, autor, capa HTTPS, ISBN-10, ISBN-13, editora, data de publicação, idioma, número de páginas, categorias e edição. A integração com a Open Library seleciona dados de edição dentro da própria resposta de busca, distinguindo-os dos dados gerais da obra sem introduzir chamadas por resultado. Google Books escolhe a melhor capa HTTPS disponível.
+
+A interface exibe uma confirmação somente leitura antes da importação. O leitor pode conferir a edição, o idioma, a editora, a data e o ISBN, mas não altera um registro externo compartilhado. Somente ao confirmar a interface chama `POST /api/library/external` com o corpo abaixo. `externalProvider` e `externalId` devem ser os valores devolvidos pela busca, por exemplo `OpenLibrary` ou `GoogleBooks`; não construa o identificador manualmente. A operação é idempotente pelo par provider/identificador, e o registro importado pode ser reutilizado por outros leitores.
 
 ```json
 {
   "externalProvider": "OpenLibrary",
-  "externalId": "OL12345W"
+  "externalId": "OL12345M"
 }
 ```
 
-Se o livro não estiver nos resultados, `POST /api/library/manual` aceita título obrigatório, autor opcional e ISBN-10 ou ISBN-13 opcional. A ausência de autor usa “Autor não informado”. Um ISBN informado deve ter dígito verificador válido. O livro manual é privado: somente a conta proprietária consegue encontrá-lo, abrir seus detalhes ou adicioná-lo à biblioteca.
+A importação persiste somente título, subtítulo, autor, capa, ISBN-10, ISBN-13, editora, data de publicação e idioma, que já fazem parte do modelo `Book`. Número de páginas, categorias e identificação textual da edição são úteis para a escolha, mas não são persistidos. Descrições e sinopses eventualmente presentes na resposta de um provider são ignoradas: elas não entram no contrato da busca, na interface nem no banco, porque podem revelar partes da história. Quando um registro importado existente não possui um desses campos persistentes, uma nova inclusão pode preenchê-lo sem sobrescrever um valor já cadastrado.
+
+Se o livro não estiver nos resultados, `POST /api/library/manual` aceita título obrigatório, autor opcional e ISBN-10 ou ISBN-13 opcional. A ausência de autor usa “Autor não informado”. Um ISBN informado pode conter espaços ou hífens, deve ter dígito verificador válido e é armazenado de forma normalizada; equivalentes ISBN-10 e ISBN-13 são tratados como a mesma edição. O livro manual é privado: somente a conta proprietária consegue encontrá-lo, abrir seus detalhes ou adicioná-lo à biblioteca.
 
 ```json
 {

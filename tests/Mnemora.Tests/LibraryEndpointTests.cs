@@ -49,6 +49,11 @@ public sealed class LibraryEndpointTests
         Assert.Equal(firstBook.GetProperty("id").GetGuid(),
             secondBook.GetProperty("id").GetGuid());
         Assert.Equal(JsonValueKind.Null, firstBook.GetProperty("description").ValueKind);
+        Assert.Equal("Edição de teste", firstBook.GetProperty("subtitle").GetString());
+        Assert.Equal("9780306406157", firstBook.GetProperty("isbn13").GetString());
+        Assert.Equal("Editora Exemplo", firstBook.GetProperty("publisher").GetString());
+        Assert.Equal("2021-05-01", firstBook.GetProperty("publishedDate").GetString());
+        Assert.Equal("pt-BR", firstBook.GetProperty("language").GetString());
         await using var scope = factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
         Assert.Equal(1, await db.Books.CountAsync());
@@ -56,6 +61,12 @@ public sealed class LibraryEndpointTests
         var imported = await db.Books.SingleAsync();
         Assert.Equal(BookCatalogKind.Imported, imported.CatalogKind);
         Assert.Equal(FakeProvider.Provider, imported.ExternalProvider);
+        Assert.Equal("Edição de teste", imported.Subtitle);
+        Assert.Equal("0306406152", imported.Isbn10);
+        Assert.Equal("9780306406157", imported.Isbn13);
+        Assert.Equal("Editora Exemplo", imported.Publisher);
+        Assert.Equal(new DateOnly(2021, 5, 1), imported.PublishedDate);
+        Assert.Equal("pt-BR", imported.Language);
         Assert.Null(imported.OwnerUserId);
     }
 
@@ -132,6 +143,8 @@ public sealed class LibraryEndpointTests
             (await owner.GetAsync($"/api/books/{firstId}")).StatusCode);
         Assert.Contains(firstId.ToString(),
             await owner.GetStringAsync("/api/books/search?q=Livro%20particular"));
+        Assert.Contains(firstId.ToString(),
+            await owner.GetStringAsync("/api/books/search?q=978-0-306-40615-7"));
         Assert.Equal(HttpStatusCode.NotFound,
             (await anonymous.GetAsync($"/api/books/{firstId}")).StatusCode);
         Assert.Equal(HttpStatusCode.NotFound,
@@ -236,6 +249,73 @@ public sealed class LibraryEndpointTests
         Assert.Equal("local", result.GetProperty("source").GetString());
         Assert.Equal(HttpStatusCode.Created,
             (await Write(client, HttpMethod.Post, $"/api/library/{imported.Id}")).StatusCode);
+    }
+
+    [Fact]
+    public async Task Legacy_work_import_is_reused_for_an_edition_result()
+    {
+        using var factory = CreateFactory("legacy-work-import", new FakeProvider());
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        await Register(client);
+        var legacy = new Book
+        {
+            Title = "Título importado na versão anterior",
+            Author = "Autora",
+            CatalogKind = BookCatalogKind.Imported,
+            ExternalProvider = FakeProvider.Provider,
+            ExternalId = FakeProvider.LegacyWorkId
+        };
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            db.Books.Add(legacy);
+            await db.SaveChangesAsync();
+        }
+
+        var search = await client.GetFromJsonAsync<JsonElement>(
+            "/api/books/search?q=resultado-da-edicao");
+        var result = Assert.Single(search.EnumerateArray());
+        Assert.Equal(legacy.Id, result.GetProperty("id").GetGuid());
+        Assert.Equal("local", result.GetProperty("source").GetString());
+
+        var response = await Write(client, HttpMethod.Post, "/api/library/external",
+            new { externalProvider = FakeProvider.Provider,
+                externalId = FakeProvider.EditionId });
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var responseBook = (await response.Content.ReadFromJsonAsync<JsonElement>())
+            .GetProperty("book");
+        Assert.Equal(legacy.Id, responseBook.GetProperty("id").GetGuid());
+        Assert.Equal("9780306406157", responseBook.GetProperty("isbn13").GetString());
+
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var verificationDb = verificationScope.ServiceProvider
+            .GetRequiredService<MnemoraDbContext>();
+        Assert.Equal(1, await verificationDb.Books.CountAsync());
+        Assert.Equal(FakeProvider.LegacyWorkId,
+            (await verificationDb.Books.SingleAsync()).ExternalId);
+    }
+
+    [Fact]
+    public async Task Isbn_search_is_canonicalized_for_providers_and_cached()
+    {
+        var provider = new RecordingProvider();
+        using var factory = CreateFactory("isbn-cache", provider);
+        using var client = factory.CreateClient();
+
+        var formatted = await client.GetFromJsonAsync<JsonElement>(
+            "/api/books/search?q=978-0-306-40615-7");
+        var canonical = await client.GetFromJsonAsync<JsonElement>(
+            "/api/books/search?q=9780306406157");
+
+        Assert.Equal(1, provider.SearchCalls);
+        Assert.Equal("9780306406157", provider.LastQuery);
+        var result = Assert.Single(formatted.EnumerateArray());
+        Assert.Equal("9780306406157", result.GetProperty("isbn13").GetString());
+        Assert.Equal("Edição internacional", result.GetProperty("subtitle").GetString());
+        Assert.Equal(320, result.GetProperty("pageCount").GetInt32());
+        Assert.Equal("2ª edição", result.GetProperty("edition").GetString());
+        Assert.Equal(1, canonical.GetArrayLength());
     }
 
     [Fact]
@@ -533,9 +613,14 @@ public sealed class LibraryEndpointTests
     private sealed class FakeProvider : IBookMetadataProvider
     {
         public const string Provider = "TestProvider";
+        public const string EditionId = "external-demo-1";
+        public const string LegacyWorkId = "external-work-1";
         private static readonly ExternalBookMetadata Metadata = new(
-            Provider, "external-demo-1", "Livro externo", "Autora",
-            null, null, null, null, null, "pt-BR");
+            Provider, EditionId, "Livro externo", "Autora",
+            "https://example.test/cover.jpg", "0306406152", "9780306406157",
+            "Editora Exemplo", new DateOnly(2021, 5, 1), "pt-BR",
+            Subtitle: "Edição de teste", PageCount: 256,
+            Categories: ["Ficção"], Edition: "1ª edição", WorkId: LegacyWorkId);
         public bool IsConfigured => true;
         public Task<IReadOnlyList<ExternalBookMetadata>> SearchAsync(
             string query, CancellationToken cancellationToken) =>
@@ -553,6 +638,31 @@ public sealed class LibraryEndpointTests
         public Task<IReadOnlyList<ExternalBookMetadata>> SearchAsync(
             string query, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<ExternalBookMetadata>>([]);
+
+        public Task<ExternalBookMetadata?> GetAsync(
+            string provider, string externalId, CancellationToken cancellationToken) =>
+            Task.FromResult<ExternalBookMetadata?>(null);
+    }
+
+    private sealed class RecordingProvider : IBookMetadataProvider
+    {
+        private static readonly ExternalBookMetadata Metadata = new(
+            "RecordingProvider", "recording-1", "Livro internacional", "Autora",
+            null, "0306406152", "9780306406157", "Editora", new DateOnly(2020, 1, 1),
+            "eng", Subtitle: "Edição internacional", PageCount: 320,
+            Categories: ["History"], Edition: "2ª edição");
+
+        public bool IsConfigured => true;
+        public int SearchCalls { get; private set; }
+        public string? LastQuery { get; private set; }
+
+        public Task<IReadOnlyList<ExternalBookMetadata>> SearchAsync(
+            string query, CancellationToken cancellationToken)
+        {
+            SearchCalls++;
+            LastQuery = query;
+            return Task.FromResult<IReadOnlyList<ExternalBookMetadata>>([Metadata]);
+        }
 
         public Task<ExternalBookMetadata?> GetAsync(
             string provider, string externalId, CancellationToken cancellationToken) =>
