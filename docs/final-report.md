@@ -4,7 +4,7 @@
 
 O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, busca externa, cadastro manual de livros, biblioteca, progresso por unidade, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo. A regra antisspoiler permanece no backend e impede que dados futuros sejam enviados ao frontend.
 
-Este relatório foi atualizado em 18 de setembro de 2026. O histórico abaixo foi confirmado na branch `main` até a fase 13, commit `f6841c9`, já sincronizado com `origin/main`. A fase 14 corresponde às alterações identificadas abaixo como `este commit`; suas evidências quantitativas serão preenchidas depois da execução dos gates finais.
+Este relatório foi atualizado em 1 de outubro de 2026. O histórico abaixo foi confirmado na branch `main` até a fase 14, commit `24aaaac`, já sincronizado com `origin/main`.
 
 ## Histórico por fase
 
@@ -24,7 +24,7 @@ Este relatório foi atualizado em 18 de setembro de 2026. O histórico abaixo fo
 | 11 — Preparação do deploy | `85b2c2a` | Container de produção, Blueprint do Render, health check e documentação operacional |
 | 12 — Demonstração gratuita | `9eb427b` | Render gratuito sem cartão, aviso de dados efêmeros e seed sem Admin obrigatório |
 | 13 — Livros do leitor | `f6841c9` | Open Library sem chave, Google Books opcional, cadastro manual privado e experiência para livros sem pack |
-| 14 — Metadados por edição | este commit | Metadados bibliográficos ricos, ISBN canônico, deduplicação entre providers, confirmação da edição e cache externo de quatro horas |
+| 14 — Metadados por edição | `24aaaac` | Metadados bibliográficos ricos, ISBN canônico, deduplicação entre providers, confirmação da edição e cache externo de quatro horas |
 
 ## Funcionalidades entregues
 
@@ -33,7 +33,7 @@ Este relatório foi atualizado em 18 de setembro de 2026. O histórico abaixo fo
 - cadastro, login, logout e sessão por cookie HttpOnly;
 - catálogo local e busca externa pela Open Library sem chave, com Google Books opcional e resultados diferenciados por edição;
 - metadados ricos na busca e confirmação somente leitura antes da importação externa;
-- normalização de ISBN e deduplicação entre providers por ISBN-13, ISBN-10 ou provider/identificador;
+- normalização de ISBN e deduplicação entre providers pelo ISBN canônico, preferindo ISBN-13, ou pelo provider/identificador quando não há ISBN válido;
 - importação idempotente e reutilizável pelo par provider/identificador, sem descrição ou sinopse externa potencialmente reveladora;
 - cadastro manual de livro privado ao leitor, com título obrigatório e autor/ISBN opcionais;
 - biblioteca privada, status de leitura, progresso por unidade e página informativa;
@@ -95,7 +95,7 @@ Os 28 testes .NET incluem os casos críticos pedidos no aceite: antes, exatament
 
 A fase 13 acrescenta testes de providers, importação por provider, privacidade do cadastro manual, deduplicação e uso de livros sem pack. Os totais da tabela anterior permanecem como registro da fase 10.
 
-A fase 14 amplia os contratos de metadados e a experiência de seleção de edição. As evidências quantitativas desta fase devem ser registradas somente após a execução dos respectivos comandos; as tabelas anteriores permanecem como histórico factual das fases já verificadas.
+A fase 14 amplia os contratos de metadados e a experiência de seleção de edição. As tabelas anteriores permanecem como histórico factual das fases já verificadas.
 
 ### Evidências da fase 13
 
@@ -108,6 +108,18 @@ A fase 14 amplia os contratos de metadados e a experiência de seleção de edi�
 | Jornada em navegador local | Aprovada em desktop e 360 px | Busca real na Open Library, importação, cadastro manual, acompanhamento, notas, privacidade visual e ausência de overflow/erros de console |
 | Auditorias npm e NuGet | 0 vulnerabilidades conhecidas | Dependências diretas e transitivas disponíveis aos gerenciadores |
 | `git diff --check` e busca de segredos | Aprovados | Integridade do diff e ausência de credenciais versionadas |
+
+### Evidências da fase 14
+
+| Verificação | Resultado observado | Cobertura principal |
+| --- | --- | --- |
+| `dotnet test Mnemora.slnx` | 53 testes aprovados | Parsing dos providers, ISBN canônico, edições distintas, fallback parcial, cache, importação idempotente, compatibilidade com Work legado e regressões existentes |
+| `dotnet build Mnemora.slnx` | Build aprovado, sem avisos | Solução e contrato expandido entre Application, Infrastructure e API |
+| `npm run lint` e `npm run build` em `apps/web` | Aprovados | Next.js 16.3.5, TypeScript, cards bibliográficos e confirmação da edição |
+| `node --test tests/pwa/pwa-assets.test.mjs` | 4 testes aprovados | Manifesto, ícones e exclusão de dados privados do service worker |
+| `dotnet ef migrations has-pending-model-changes` | Nenhuma alteração pendente | Reutilização das colunas existentes em `Book`, sem migration artificial |
+| Jornada em navegador local | Aprovada em desktop e 360 px | Busca real por título e ISBN formatado, metadados da edição, ausência de importação antes da confirmação, inclusão explícita, foco acessível, ausência de overflow e console sem erros |
+| Auditorias npm e NuGet | 0 vulnerabilidades conhecidas | Dependências diretas e transitivas disponíveis aos gerenciadores |
 
 A afirmação “zero violações” se limita às páginas e estados visitados pela auditoria automatizada. Ela não substitui avaliação manual completa com leitores de tela, diferentes tecnologias assistivas ou uma auditoria de conteúdo editorial.
 
