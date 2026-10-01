@@ -42,7 +42,7 @@ Versões registradas no projeto:
 
 | Camada | Tecnologia |
 | --- | --- |
-| Web | Next.js 16.3.5, React 19.3.0, TypeScript 5.9.3, Tailwind CSS 4.3.3 |
+| Web | Next.js 16.3.8, React 19.3.0, TypeScript 5.9.3, Tailwind CSS 4.3.3 |
 | API | ASP.NET Core em .NET 10 (`net10.0`) |
 | SDK .NET | 10.0.400, definido em `global.json` |
 | Persistência | EF Core 10.0.12 e SQLite |

@@ -115,7 +115,7 @@ A fase 14 amplia os contratos de metadados e a experiência de seleção de edi�
 | --- | --- | --- |
 | `dotnet test Mnemora.slnx` | 53 testes aprovados | Parsing dos providers, ISBN canônico, edições distintas, fallback parcial, cache, importação idempotente, compatibilidade com Work legado e regressões existentes |
 | `dotnet build Mnemora.slnx` | Build aprovado, sem avisos | Solução e contrato expandido entre Application, Infrastructure e API |
-| `npm run lint` e `npm run build` em `apps/web` | Aprovados | Next.js 16.3.5, TypeScript, cards bibliográficos e confirmação da edição |
+| `npm run lint` e `npm run build` em `apps/web` | Aprovados | Next.js 16.3.8, TypeScript, cards bibliográficos e confirmação da edição |
 | `node --test tests/pwa/pwa-assets.test.mjs` | 4 testes aprovados | Manifesto, ícones e exclusão de dados privados do service worker |
 | `dotnet ef migrations has-pending-model-changes` | Nenhuma alteração pendente | Reutilização das colunas existentes em `Book`, sem migration artificial |
 | Jornada em navegador local | Aprovada em desktop e 360 px | Busca real por título e ISBN formatado, metadados da edição, ausência de importação antes da confirmação, inclusão explícita, foco acessível, ausência de overflow e console sem erros |

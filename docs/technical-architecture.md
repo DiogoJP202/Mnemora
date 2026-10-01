@@ -38,7 +38,7 @@ Não há cache distribuído, fila ou serviço de IA. O estado persistente fica n
 
 | Área | Responsabilidade | Dependências relevantes |
 | --- | --- | --- |
-| `apps/web` | Landing, autenticação, biblioteca, leitura, lore, recall, notas, revisão, administração e PWA | Next.js 16.3.5, React 19.3, TypeScript |
+| `apps/web` | Landing, autenticação, biblioteca, leitura, lore, recall, notas, revisão, administração e PWA | Next.js 16.3.8, React 19.3, TypeScript |
 | `src/Mnemora.Domain` | Entidades, enums e estado persistente do domínio | Nenhuma outra camada do produto |
 | `src/Mnemora.Application` | Regras compartilhadas de visibilidade, integridade e contratos de projeção | Domain |
 | `src/Mnemora.Infrastructure` | EF Core, Identity, SQLite, consultas seguras, consistência, seed e providers Open Library/Google Books | Application e Domain |
