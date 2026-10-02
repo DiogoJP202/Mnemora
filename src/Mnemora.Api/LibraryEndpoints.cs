@@ -232,16 +232,48 @@ public static class LibraryEndpoints
         }).RequireRateLimiting("import-external");
 
         library.MapDelete("/{bookId:guid}", async (
-            Guid bookId, ClaimsPrincipal user, MnemoraDbContext db) =>
+            Guid bookId, ClaimsPrincipal user, MnemoraDbContext db,
+            CancellationToken cancellationToken) =>
         {
             var userId = CurrentUser.Id(user);
-            var row = await db.UserBooks.FirstOrDefaultAsync(x =>
-                x.UserId == userId && x.BookId == bookId);
-            if (row is null) return Results.NotFound();
-            db.UserBooks.Remove(row);
-            await db.SaveChangesAsync();
+            await using var transaction = await db.Database
+                .BeginTransactionAsync(cancellationToken);
+            if (!await db.UserBooks.AsNoTracking().AnyAsync(x =>
+                    x.UserId == userId && x.BookId == bookId, cancellationToken))
+                return Results.NotFound();
+
+            var privateBookCanBeRemoved = await db.Books.AsNoTracking().AnyAsync(x =>
+                    x.Id == bookId
+                    && x.CatalogKind == BookCatalogKind.Private
+                    && x.OwnerUserId == userId, cancellationToken)
+                && !await db.ReadingUnits.AsNoTracking().AnyAsync(x =>
+                    x.BookId == bookId, cancellationToken)
+                && !await db.LoreEntities.AsNoTracking().AnyAsync(x =>
+                    x.BookId == bookId, cancellationToken)
+                && !await db.LoreRelations.AsNoTracking().AnyAsync(x =>
+                    x.BookId == bookId, cancellationToken)
+                && !await db.UserBooks.AsNoTracking().AnyAsync(x =>
+                    x.BookId == bookId && x.UserId != userId, cancellationToken)
+                && !await db.UserNotes.AsNoTracking().AnyAsync(x =>
+                    x.BookId == bookId && x.UserId != userId, cancellationToken)
+                && !await db.UserRecallActivities.AsNoTracking().AnyAsync(x =>
+                    x.BookId == bookId && x.UserId != userId, cancellationToken);
+
+            await db.UserNotes.Where(x => x.UserId == userId && x.BookId == bookId)
+                .ExecuteDeleteAsync(cancellationToken);
+            await db.UserRecallActivities.Where(x =>
+                    x.UserId == userId && x.BookId == bookId)
+                .ExecuteDeleteAsync(cancellationToken);
+            await db.UserBooks.Where(x => x.UserId == userId && x.BookId == bookId)
+                .ExecuteDeleteAsync(cancellationToken);
+
+            if (privateBookCanBeRemoved)
+                await db.Books.Where(x => x.Id == bookId)
+                    .ExecuteDeleteAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
             return Results.NoContent();
-        });
+        }).RequireRateLimiting("memory-write");
 
         library.MapPatch("/{bookId:guid}/progress", async (
             Guid bookId, JsonElement request, ClaimsPrincipal user, MnemoraDbContext db) =>
@@ -254,8 +286,9 @@ public static class LibraryEndpoints
                 return Results.BadRequest("Progresso inválido.");
             var hasUnit = request.TryGetProperty("currentReadingUnitId", out var unitValue);
             var hasPage = request.TryGetProperty("currentPage", out var pageValue);
-            if (!hasUnit && !hasPage)
-                return Results.BadRequest("Informe unidade ou página.");
+            var hasStatus = request.TryGetProperty("status", out var statusValue);
+            if (!hasUnit && !hasPage && !hasStatus)
+                return Results.BadRequest("Informe unidade, página ou status.");
             Guid? unitId = row.CurrentReadingUnitId;
             if (hasUnit)
             {
@@ -272,26 +305,42 @@ public static class LibraryEndpoints
                     && pageValue.TryGetInt32(out var parsed)) currentPage = parsed;
                 else return Results.BadRequest("Página de referência inválida.");
             }
+            UserBookStatus? explicitStatus = null;
+            if (hasStatus)
+            {
+                if (statusValue.ValueKind != JsonValueKind.String
+                    || !TryParseStatus(statusValue.GetString(), out var parsed))
+                    return Results.BadRequest("Status inválido.");
+                explicitStatus = parsed;
+            }
             if (currentPage is <= 0)
                 return Results.BadRequest("Página de referência inválida.");
             if (unitId is Guid selectedUnit
                 && !await db.ReadingUnits.AnyAsync(x => x.Id == selectedUnit && x.BookId == bookId))
                 return Results.BadRequest("Unidade de leitura inválida para este livro.");
+            var unitChanged = hasUnit && unitId != row.CurrentReadingUnitId;
+            var pageChanged = hasPage && currentPage != row.CurrentPage;
             row.CurrentReadingUnitId = unitId;
             row.CurrentPage = currentPage;
-            row.UpdatedAt = DateTime.UtcNow;
-            if (hasUnit && unitId.HasValue)
+            var updatedAt = DateTime.UtcNow;
+            row.UpdatedAt = updatedAt;
+            if (explicitStatus is UserBookStatus status)
+            {
+                ApplyStatus(row, status, updatedAt);
+            }
+            else if (hasUnit && unitId.HasValue)
             {
                 row.Status = UserBookStatus.Reading;
-                row.StartedAt ??= DateTime.UtcNow;
+                row.StartedAt ??= updatedAt;
             }
-            if ((hasUnit && unitId.HasValue) || (hasPage && currentPage.HasValue))
+            if ((unitChanged && unitId.HasValue) || (pageChanged && currentPage.HasValue))
             {
-                row.LastReadAt = DateTime.UtcNow;
+                row.StartedAt ??= updatedAt;
+                row.LastReadAt = updatedAt;
             }
             await db.SaveChangesAsync();
             return Results.Ok(await ToDtoAsync(db, row));
-        });
+        }).RequireRateLimiting("memory-write");
 
         library.MapPatch("/{bookId:guid}/status", async (
             Guid bookId, StatusWrite request, ClaimsPrincipal user, MnemoraDbContext db) =>
@@ -300,18 +349,14 @@ public static class LibraryEndpoints
             var row = await db.UserBooks.FirstOrDefaultAsync(x =>
                 x.UserId == userId && x.BookId == bookId);
             if (row is null) return Results.NotFound();
-            if (string.IsNullOrWhiteSpace(request.Status)
-                || !request.Status.All(char.IsLetter)
-                || !Enum.TryParse<UserBookStatus>(request.Status, true, out var status)
-                || !Enum.IsDefined(status))
+            if (!TryParseStatus(request.Status, out var status))
                 return Results.BadRequest("Status inválido.");
-            row.Status = status;
-            row.StartedAt ??= status == UserBookStatus.Reading ? DateTime.UtcNow : null;
-            row.FinishedAt = status == UserBookStatus.Finished ? DateTime.UtcNow : null;
-            row.UpdatedAt = DateTime.UtcNow;
+            var updatedAt = DateTime.UtcNow;
+            ApplyStatus(row, status, updatedAt);
+            row.UpdatedAt = updatedAt;
             await db.SaveChangesAsync();
             return Results.Ok(await ToDtoAsync(db, row));
-        });
+        }).RequireRateLimiting("memory-write");
 
         return app;
     }
@@ -381,6 +426,24 @@ public static class LibraryEndpoints
             return false;
         setter(candidate);
         return true;
+    }
+
+    private static bool TryParseStatus(string? value, out UserBookStatus status)
+    {
+        status = default;
+        return !string.IsNullOrWhiteSpace(value)
+            && value.All(char.IsLetter)
+            && Enum.TryParse(value, true, out status)
+            && Enum.IsDefined(status);
+    }
+
+    private static void ApplyStatus(UserBook row, UserBookStatus status, DateTime updatedAt)
+    {
+        row.Status = status;
+        row.StartedAt ??= status == UserBookStatus.Reading ? updatedAt : null;
+        row.FinishedAt = status == UserBookStatus.Finished
+            ? row.FinishedAt ?? updatedAt
+            : null;
     }
 
     private static string? NormalizeText(string? value)

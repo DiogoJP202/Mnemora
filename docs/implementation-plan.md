@@ -28,6 +28,16 @@ Cada fase termina com validações pertinentes, inspeção do diff e de segredos
 | 09 | PWA, temas, acessibilidade e acabamento | Manifest, instalação e cache seguro |
 | 10 | Revisão final e documentação | Build, lint, testes, migration e browser |
 
+### Evoluções pós-MVP
+
+| Fase | Entrega | Gate mínimo |
+| --- | --- | --- |
+| 11 | Container e Blueprint para publicação no Render | Build do container e health check |
+| 12 | Demonstração gratuita com dados efêmeros | Deploy sem credenciais e aviso operacional |
+| 13 | Open Library, cadastro manual privado e livros sem pack | Providers, isolamento e jornada de adição |
+| 14 | Metadados bibliográficos por edição e confirmação da importação | Contratos, deduplicação, cache e jornada por ISBN |
+| 15 | Gestão completa da estante: status em todos os livros, atualização atômica, limpeza do ponto, metadados persistidos e remoção segura | Atomicidade e isolamento, build/lint e jornada desktop/360 px |
+
 ## Riscos e decisões
 
 - O conteúdo demonstrativo será um universo fictício com textos originais e curtos. Metadados externos fornecem título, autor e capa, mas nenhuma descrição externa entra automaticamente no lore.
@@ -35,6 +45,8 @@ Cada fase termina com validações pertinentes, inspeção do diff e de segredos
 - Recuperação de senha, IA, busca semântica e repetição espaçada ficam para versões futuras. A revisão MVP registra feedback sem algoritmo de agendamento.
 - Um Admin de desenvolvimento é criado apenas por seed explícito com credenciais fornecidas em variáveis de ambiente; nenhum segredo é versionado.
 - O `origin` configurado é o repositório do projeto. O trabalho prossegue na branch `main`, vazia no início.
+- Limpar o ponto de leitura revoga o lore, mas mantém o livro e suas memórias pessoais; remover o livro é definitivo para progresso, notas e histórico de revisão daquela conta e exige confirmação explícita.
+- A exclusão de um `Book` é conservadora: registros curados ou importados sobrevivem à remoção da estante, e um livro privado só é eliminado quando pertence ao leitor, fica órfão e não possui conteúdo editorial.
 
 ## Aceite
 

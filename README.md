@@ -2,7 +2,7 @@
 
 > **Remember the story. Not the spoilers.**
 
-Mnemora é um companion de leitura mobile-first para recordar personagens, lugares, facções, relações e acontecimentos sem ultrapassar o ponto atual do leitor. A aplicação também oferece biblioteca pessoal, busca de livros por título, autor ou ISBN, cadastro manual, progresso por unidade de leitura, notas privadas, revisão curta de entidades conhecidas, catálogo e uma área administrativa para criar packs de lore.
+Mnemora é um companion de leitura mobile-first para recordar personagens, lugares, facções, relações e acontecimentos sem ultrapassar o ponto atual do leitor. A aplicação também oferece biblioteca pessoal com gestão de status e remoção segura, busca de livros por título, autor ou ISBN, cadastro manual, progresso por unidade de leitura que pode ser limpo, notas privadas, revisão curta de entidades conhecidas, catálogo e uma área administrativa para criar packs de lore.
 
 O projeto é uma PWA em português (`pt-BR`) e usa um universo fictício original no conteúdo demonstrativo.
 
@@ -246,17 +246,21 @@ Todos os endpoints vivem sob `/api`. Rotas de escrita exigem `X-CSRF-TOKEN`; as 
 | Revisão | `GET /api/books/{bookId}/review`, `POST /api/books/{bookId}/review/{entityId}` |
 | Administração | `/api/admin/books`, `/api/admin/books/{bookId}/reading-units`, `/api/admin/books/{bookId}/entities`, `/api/admin/entities/{entityId}`, aliases, fatos, relações e previews seguros |
 
+O formulário do livro grava `status`, `currentReadingUnitId` e `currentPage` em uma única chamada a `PATCH /api/library/{bookId}/progress`. Campos ausentes preservam o valor atual; `null` explícito limpa unidade ou página, e todos os valores são validados antes de qualquer mutação. Um status explícito prevalece sobre a inferência automática de `Reading`. Selecionar “Nenhuma — limpar ponto de leitura” restaura o escopo sem progresso e revoga imediatamente o lore anteriormente visível; marcar `Finished` nunca concede conhecimento por conta própria.
+
+`DELETE /api/library/{bookId}` exige sessão, antiforgery e rate limit. A operação transacional remove o vínculo, as notas privadas e as atividades de revisão somente do leitor atual. Livros curados ou importados permanecem no catálogo e dados de outras contas são preservados. Um livro manual privado do próprio leitor só é excluído do catálogo quando fica órfão, sem unidades, lore, relações ou referências de outra conta. A ausência do vínculo retorna `404`.
+
 A busca externa usa a Open Library por padrão e não exige chave. `GOOGLE_BOOKS_API_KEY` habilita o Google Books como fonte adicional; falha em um provider não descarta resultados válidos do outro. Os resultados incluem, quando disponíveis, subtítulo, editora, data de publicação, idioma, ISBN-10/ISBN-13, número de páginas, categorias e identificação da edição. Capas são normalizadas para HTTPS. A Open Library usa dados de edição quando eles existem, sem fazer uma requisição adicional para cada resultado.
 
 Um ISBN com espaços ou hífens é validado e normalizado antes da consulta; ISBN-10 e ISBN-13 equivalentes levam à mesma busca exata nos providers. A composição elimina duplicatas pelo ISBN canônico, preferindo ISBN-13, e, quando não há ISBN válido, pelo par provider/identificador. Somente os resultados externos, sem dados do usuário, ficam em cache na memória do processo por quatro horas. Respostas privadas continuam com `no-store` e fora do cache da PWA.
 
 Na interface, um resultado externo abre uma confirmação somente leitura antes de qualquer escrita. O leitor confere edição, idioma, editora, data e ISBN e então confirma a inclusão. Só essa confirmação envia `{ "externalProvider": "...", "externalId": "..." }` a `POST /api/library/external`; o identificador deve ser exatamente o devolvido pela busca. O par provider/identificador torna a importação idempotente e permite que outros leitores reutilizem o mesmo registro bibliográfico, sem oferecer edição individual de um registro compartilhado. Quando uma edição está disponível, resultados da Open Library usam seu ID (`OL…M`) e conservam internamente o ID da obra (`OL…W`) para reconhecer importações feitas pela versão anterior da integração; sem uma edição válida, o ID da obra permanece como fallback.
 
-A importação persiste somente os campos que já pertencem a `Book`: título, subtítulo, autor, capa, ISBN-10, ISBN-13, editora, data de publicação e idioma. Número de páginas, categorias e rótulo de edição ajudam na escolha, mas permanecem apenas na resposta de busca e na confirmação. Descrições e sinopses eventualmente devolvidas pelos providers são ignoradas e nunca chegam ao catálogo ou à interface, pois podem conter spoilers.
+A importação persiste somente os campos que já pertencem a `Book`: título, subtítulo, autor, capa, ISBN-10, ISBN-13, editora, data de publicação e idioma. Número de páginas, categorias e rótulo de edição ajudam na escolha, mas permanecem apenas na resposta de busca e na confirmação. Descrições e sinopses eventualmente devolvidas pelos providers são ignoradas e nunca chegam ao catálogo ou à interface, pois podem conter spoilers. A estante mostra subtítulo e um resumo da edição com editora, ano e idioma, usando ISBN como fallback; o detalhe mostra todos os metadados persistidos disponíveis.
 
 Quando a busca não encontra o livro, `POST /api/library/manual` aceita `{ "title": "...", "author": "...", "isbn": "..." }`. Apenas `title` é obrigatório; autor e ISBN são opcionais. O ISBN, quando presente, aceita formatação comum, precisa ter dígito verificador válido e é armazenado na forma normalizada. O livro manual pertence ao leitor que o criou e não aparece para outras contas.
 
-Cada DTO de livro informa `memoryPackAvailable`. Um livro sem pack continua permitindo status de leitura, página de referência e notas privadas. Personagens, lugares, timeline, Recall e revisão só ficam disponíveis quando houver unidades e lore curados; metadados importados ou manuais nunca são convertidos automaticamente em memória da história.
+Cada DTO de livro informa `memoryPackAvailable`. Todo livro aceita os quatro status de leitura, página de referência e notas privadas. Quando há um pack, a unidade escolhida controla a visibilidade e pode ser limpa sem remover o livro. Personagens, lugares, timeline, Recall e revisão só ficam disponíveis quando houver unidades e lore curados; metadados importados ou manuais nunca são convertidos automaticamente em memória da história.
 
 ## Limitações do MVP
 

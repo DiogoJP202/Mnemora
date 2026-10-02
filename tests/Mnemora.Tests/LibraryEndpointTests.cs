@@ -403,6 +403,231 @@ public sealed class LibraryEndpointTests
     }
 
     [Fact]
+    public async Task Removing_a_book_deletes_only_the_current_readers_memory()
+    {
+        using var factory = CreateFactory("remove-memory", new DisabledProvider());
+        using var owner = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var other = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        await Register(owner);
+        await Register(other);
+        var ownerId = (await owner.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetGuid();
+        var otherId = (await other.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetGuid();
+        var book = new Book { Title = "Memórias compartilhadas", Author = "Autora" };
+        var unit = new ReadingUnit
+        {
+            BookId = book.Id, Title = "Início", SafeLabel = "Capítulo 1",
+            Slug = "inicio", OrderIndex = 10, Type = ReadingUnitType.Chapter
+        };
+        var entity = new LoreEntity
+        {
+            BookId = book.Id, Name = "Pessoa conhecida", Slug = "pessoa-conhecida",
+            Type = LoreEntityType.Character, FirstKnownAtUnitId = unit.Id
+        };
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            db.Books.Add(book);
+            db.ReadingUnits.Add(unit);
+            db.LoreEntities.Add(entity);
+            db.UserBooks.AddRange(
+                new UserBook { UserId = ownerId, BookId = book.Id },
+                new UserBook { UserId = otherId, BookId = book.Id });
+            db.UserNotes.AddRange(
+                new UserNote { UserId = ownerId, BookId = book.Id, Content = "Nota A" },
+                new UserNote { UserId = otherId, BookId = book.Id, Content = "Nota B" });
+            db.UserRecallActivities.AddRange(
+                new UserRecallActivity
+                {
+                    UserId = ownerId, BookId = book.Id, EntityId = entity.Id,
+                    Remembered = true
+                },
+                new UserRecallActivity
+                {
+                    UserId = otherId, BookId = book.Id, EntityId = entity.Id,
+                    Remembered = false
+                });
+            await db.SaveChangesAsync();
+        }
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await owner.DeleteAsync($"/api/library/{book.Id}")).StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent,
+            (await Write(owner, HttpMethod.Delete, $"/api/library/{book.Id}")).StatusCode);
+
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var verificationDb = verificationScope.ServiceProvider
+            .GetRequiredService<MnemoraDbContext>();
+        Assert.True(await verificationDb.Books.AnyAsync(x => x.Id == book.Id));
+        Assert.False(await verificationDb.UserBooks.AnyAsync(x =>
+            x.UserId == ownerId && x.BookId == book.Id));
+        Assert.True(await verificationDb.UserBooks.AnyAsync(x =>
+            x.UserId == otherId && x.BookId == book.Id));
+        Assert.False(await verificationDb.UserNotes.AnyAsync(x =>
+            x.UserId == ownerId && x.BookId == book.Id));
+        Assert.True(await verificationDb.UserNotes.AnyAsync(x =>
+            x.UserId == otherId && x.BookId == book.Id));
+        Assert.False(await verificationDb.UserRecallActivities.AnyAsync(x =>
+            x.UserId == ownerId && x.BookId == book.Id));
+        Assert.True(await verificationDb.UserRecallActivities.AnyAsync(x =>
+            x.UserId == otherId && x.BookId == book.Id));
+    }
+
+    [Fact]
+    public async Task Books_are_deleted_only_when_private_orphaned_and_content_free()
+    {
+        using var factory = CreateFactory("remove-private", new DisabledProvider());
+        using var owner = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        using var other = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        await Register(owner);
+        await Register(other);
+        var ownerId = (await owner.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetGuid();
+        var otherId = (await other.GetFromJsonAsync<JsonElement>("/api/auth/me"))
+            .GetProperty("id").GetGuid();
+        var orphan = PrivateBook("Livro órfão", ownerId);
+        var shared = PrivateBook("Livro compartilhado", ownerId);
+        var withContent = PrivateBook("Livro com conteúdo", ownerId);
+        var curated = new Book { Title = "Livro curado", Author = "Autora" };
+        var imported = new Book
+        {
+            Title = "Livro importado", Author = "Autora",
+            CatalogKind = BookCatalogKind.Imported,
+            ExternalProvider = "OpenLibrary", ExternalId = "OL1M"
+        };
+        var unit = new ReadingUnit
+        {
+            BookId = withContent.Id, Title = "Capítulo existente", SafeLabel = "Capítulo 1",
+            Slug = "capitulo-existente", OrderIndex = 10, Type = ReadingUnitType.Chapter
+        };
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            db.Books.AddRange(orphan, shared, withContent, curated, imported);
+            db.ReadingUnits.Add(unit);
+            db.UserBooks.AddRange(
+                new UserBook { UserId = ownerId, BookId = orphan.Id },
+                new UserBook { UserId = ownerId, BookId = shared.Id },
+                new UserBook { UserId = otherId, BookId = shared.Id },
+                new UserBook { UserId = ownerId, BookId = withContent.Id },
+                new UserBook { UserId = ownerId, BookId = curated.Id },
+                new UserBook { UserId = ownerId, BookId = imported.Id });
+            db.UserNotes.Add(new UserNote
+            {
+                UserId = ownerId, BookId = orphan.Id, Content = "Será removida"
+            });
+            await db.SaveChangesAsync();
+        }
+
+        foreach (var id in new[]
+                 { orphan.Id, shared.Id, withContent.Id, curated.Id, imported.Id })
+            Assert.Equal(HttpStatusCode.NoContent,
+                (await Write(owner, HttpMethod.Delete, $"/api/library/{id}")).StatusCode);
+
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var verificationDb = verificationScope.ServiceProvider
+            .GetRequiredService<MnemoraDbContext>();
+        Assert.False(await verificationDb.Books.AnyAsync(x => x.Id == orphan.Id));
+        Assert.False(await verificationDb.UserNotes.AnyAsync(x => x.BookId == orphan.Id));
+        Assert.True(await verificationDb.Books.AnyAsync(x => x.Id == shared.Id));
+        Assert.True(await verificationDb.UserBooks.AnyAsync(x =>
+            x.UserId == otherId && x.BookId == shared.Id));
+        Assert.True(await verificationDb.Books.AnyAsync(x => x.Id == withContent.Id));
+        Assert.True(await verificationDb.ReadingUnits.AnyAsync(x =>
+            x.BookId == withContent.Id));
+        Assert.True(await verificationDb.Books.AnyAsync(x => x.Id == curated.Id));
+        Assert.True(await verificationDb.Books.AnyAsync(x => x.Id == imported.Id));
+    }
+
+    [Fact]
+    public async Task Combined_progress_update_is_atomic_and_explicit_status_wins()
+    {
+        using var factory = CreateFactory("combined-progress", new DisabledProvider());
+        using var client = factory.CreateClient(
+            new WebApplicationFactoryClientOptions { HandleCookies = true });
+        await Register(client);
+        var book = new Book { Title = "Atualização combinada", Author = "Autora" };
+        var unit = new ReadingUnit
+        {
+            BookId = book.Id, Title = "Primeiro capítulo", SafeLabel = "Capítulo 1",
+            Slug = "primeiro-capitulo", OrderIndex = 10, Type = ReadingUnitType.Chapter
+        };
+        var foreignBook = new Book { Title = "Outro livro", Author = "Autora" };
+        var foreignUnit = new ReadingUnit
+        {
+            BookId = foreignBook.Id, Title = "Unidade alheia", SafeLabel = "Capítulo 1",
+            Slug = "unidade-alheia", OrderIndex = 10, Type = ReadingUnitType.Chapter
+        };
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            db.Books.AddRange(book, foreignBook);
+            db.ReadingUnits.AddRange(unit, foreignUnit);
+            await db.SaveChangesAsync();
+        }
+        Assert.Equal(HttpStatusCode.Created,
+            (await Write(client, HttpMethod.Post, $"/api/library/{book.Id}")).StatusCode);
+        var path = $"/api/library/{book.Id}/progress";
+
+        var combined = await Write(client, HttpMethod.Patch, path, new
+        {
+            currentReadingUnitId = unit.Id,
+            currentPage = 42,
+            status = "Paused"
+        });
+        Assert.Equal(HttpStatusCode.OK, combined.StatusCode);
+        var body = await combined.Content.ReadFromJsonAsync<JsonElement>();
+        Assert.Equal(unit.Id, body.GetProperty("currentReadingUnitId").GetGuid());
+        Assert.Equal(42, body.GetProperty("currentPage").GetInt32());
+        Assert.Equal("Paused", body.GetProperty("status").GetString());
+
+        DateTime startedAt;
+        DateTime lastReadAt;
+        DateTime updatedAt;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            var snapshot = await db.UserBooks.SingleAsync(x => x.BookId == book.Id);
+            startedAt = Assert.IsType<DateTime>(snapshot.StartedAt);
+            lastReadAt = Assert.IsType<DateTime>(snapshot.LastReadAt);
+            updatedAt = snapshot.UpdatedAt;
+        }
+
+        var invalid = await Write(client, HttpMethod.Patch, path, new
+        {
+            currentReadingUnitId = (Guid?)null,
+            currentPage = 99,
+            status = "1"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+
+        var foreign = await Write(client, HttpMethod.Patch, path, new
+        {
+            currentReadingUnitId = foreignUnit.Id,
+            currentPage = 99,
+            status = "Finished"
+        });
+        Assert.Equal(HttpStatusCode.BadRequest, foreign.StatusCode);
+
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var verificationDb = verificationScope.ServiceProvider
+            .GetRequiredService<MnemoraDbContext>();
+        var saved = await verificationDb.UserBooks.SingleAsync(x =>
+            x.BookId == book.Id);
+        Assert.Equal(unit.Id, saved.CurrentReadingUnitId);
+        Assert.Equal(42, saved.CurrentPage);
+        Assert.Equal(UserBookStatus.Paused, saved.Status);
+        Assert.Equal(startedAt, saved.StartedAt);
+        Assert.Equal(lastReadAt, saved.LastReadAt);
+        Assert.Equal(updatedAt, saved.UpdatedAt);
+    }
+
+    [Fact]
     public async Task Partial_progress_updates_preserve_absent_fields_and_clear_explicit_nulls()
     {
         using var factory = CreateFactory("partial-progress");
@@ -488,13 +713,52 @@ public sealed class LibraryEndpointTests
             (await Write(client, HttpMethod.Patch, $"/api/library/{bookId}/status",
                 new { status = "Finished" })).StatusCode);
 
+        DateTime finishedAt;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            finishedAt = Assert.IsType<DateTime>((await db.UserBooks.SingleAsync(x =>
+                x.BookId == bookId)).FinishedAt);
+        }
+
         var progress = await Write(client, HttpMethod.Patch,
-            $"/api/library/{bookId}/progress", new { currentPage = 321 });
+            $"/api/library/{bookId}/progress", new
+            {
+                currentPage = 321,
+                currentReadingUnitId = (Guid?)null,
+                status = "Finished"
+            });
 
         Assert.Equal(HttpStatusCode.OK, progress.StatusCode);
         var result = await progress.Content.ReadFromJsonAsync<JsonElement>();
         Assert.Equal("Finished", result.GetProperty("status").GetString());
         Assert.Equal(321, result.GetProperty("currentPage").GetInt32());
+
+        DateTime lastReadAt;
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
+            var saved = await db.UserBooks.SingleAsync(x => x.BookId == bookId);
+            Assert.Equal(finishedAt, saved.FinishedAt);
+            lastReadAt = Assert.IsType<DateTime>(saved.LastReadAt);
+        }
+
+        Assert.Equal(HttpStatusCode.OK,
+            (await Write(client, HttpMethod.Patch,
+                $"/api/library/{bookId}/progress", new
+                {
+                    currentPage = 321,
+                    currentReadingUnitId = (Guid?)null,
+                    status = "Finished"
+                })).StatusCode);
+
+        await using var verificationScope = factory.Services.CreateAsyncScope();
+        var verificationDb = verificationScope.ServiceProvider
+            .GetRequiredService<MnemoraDbContext>();
+        var repeated = await verificationDb.UserBooks.SingleAsync(x =>
+            x.BookId == bookId);
+        Assert.Equal(finishedAt, repeated.FinishedAt);
+        Assert.Equal(lastReadAt, repeated.LastReadAt);
     }
 
     [Fact]
@@ -588,6 +852,14 @@ public sealed class LibraryEndpointTests
         if (currentPage is int number) Assert.Equal(number, page.GetInt32());
         else Assert.Equal(JsonValueKind.Null, page.ValueKind);
     }
+
+    private static Book PrivateBook(string title, Guid ownerId) => new()
+    {
+        Title = title,
+        Author = "Autora",
+        CatalogKind = BookCatalogKind.Private,
+        OwnerUserId = ownerId
+    };
 
     private static async Task Register(HttpClient client)
     {

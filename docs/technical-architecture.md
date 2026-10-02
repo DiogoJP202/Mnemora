@@ -68,7 +68,7 @@ erDiagram
 
 - `Book` guarda título, subtítulo, autoria, capa, ISBN-10/ISBN-13, editora, data de publicação, idioma e identificadores externos. `CatalogKind` distingue `Curated`, `Imported` e `Private`; somente o tipo privado possui `OwnerUserId`. A combinação de provider e identificador externo é única, e ISBNs normalizados de livros privados são únicos por proprietário. Página total, categorias e rótulo de edição são dados transitórios da busca, sem novas colunas persistentes.
 - `ReadingUnit` representa parte, capítulo, seção ou subseção. `OrderIndex` é absoluto e único dentro do livro; `ParentUnitId` cria a hierarquia. `SafeLabel` pode ser mostrado antes da unidade, enquanto `Title` só é exposto depois da fronteira.
-- `UserBook` registra posse na biblioteca, status, unidade atual e página informativa. A combinação de usuário e livro é única.
+- `UserBook` registra posse na biblioteca, status, unidade atual, página informativa e timestamps do ciclo de leitura. A combinação de usuário e livro é única. Unidade e página podem ser limpas; ao remover o vínculo, notas e atividades de revisão daquele usuário também são eliminadas.
 - `LoreEntity` representa personagem, facção, lugar, criatura, item, evento, organização ou conceito. `FirstKnownAtUnitId` libera nome, descrição curta e imagem. Eventos podem usar `ChronologyIndex`, independente da ordem de leitura.
 - `EntityAlias`, `LoreFact` e `LoreRelation` têm seu próprio `RevealAtUnitId`. Uma relação referencia origem e destino e só pode existir a partir do momento em que ambos são conhecidos.
 - `UserNote` pertence a um usuário e livro e pode apontar para uma entidade ou unidade.
@@ -112,7 +112,7 @@ As fronteiras são aplicadas assim:
 
 O Recall primeiro materializa apenas as fontes conhecidas e então normaliza caixa e diacríticos em .NET. Isso contorna as limitações Unicode de `LOWER`/`NOCASE` do SQLite sem ampliar o conjunto candidato. Um termo que existe somente em alias, fato ou pista futura não produz resultado. A busca vazia retorna uma lista vazia e o resultado é limitado a 12 entidades.
 
-O preview administrativo constrói um `KnowledgeScope` para a unidade escolhida e chama o mesmo `KnowledgeReader`. Assim, o painel não mantém uma segunda interpretação da fronteira. Alterar ou retroceder o progresso também não depende de invalidação: a ordem é obtida novamente em cada requisição.
+O preview administrativo constrói um `KnowledgeScope` para a unidade escolhida e chama o mesmo `KnowledgeReader`. Assim, o painel não mantém uma segunda interpretação da fronteira. Alterar ou retroceder o progresso também não depende de invalidação: a ordem é obtida novamente em cada requisição. Limpar `CurrentReadingUnitId` produz `CurrentOrder = null`; a próxima leitura retorna conjunto conhecido vazio e volta a projetar títulos de unidades como rótulos neutros.
 
 ## Segurança e privacidade
 
@@ -121,6 +121,8 @@ A autenticação usa ASP.NET Core Identity com cookie `Mnemora.Auth`. O cookie �
 Todas as mutações `POST`, `PUT`, `PATCH` e `DELETE` sob `/api` passam pela validação antiforgery. O cliente solicita `GET /api/auth/csrf` e envia o token no header `X-CSRF-TOKEN`; o cookie antiforgery também é `HttpOnly`, `SameSite=Lax` e `Secure` em produção. A API responde `401` e `403` diretamente, sem redirects HTML, e usa Problem Details para erros.
 
 Os endpoints de biblioteca, lore, notas e revisão exigem autenticação. Consultas partem do identificador da sessão e filtram propriedade; IDs pertencentes a outro usuário são tratados como não encontrados. `/api/admin` requer a role `Admin`. Credenciais administrativas não ficam no repositório: o seed lê `ADMIN_EMAIL` e `ADMIN_PASSWORD` do ambiente. Se o e-mail já existir, a promoção só ocorre quando a senha configurada corresponde à conta; resultados de criação da role e atribuição também são verificados.
+
+As mutações de acompanhamento usam o rate limit `memory-write`. A remoção da estante ocorre em transação e apaga somente `UserBook`, `UserNote` e `UserRecallActivity` do usuário autenticado. Registros `Curated` e `Imported` e as memórias de outras contas permanecem. Um livro `Private` só é removido quando pertence ao leitor, não possui unidades ou lore e não tem outra referência.
 
 Um middleware aplica `Cache-Control: no-store` a toda resposta sob `/api`. O cliente também usa `fetch` com `cache: "no-store"` e `credentials: "same-origin"`. CORS permite apenas a origem configurada em `Mnemora:WebOrigin`. Os providers externos têm timeout; a composição consulta as fontes configuradas, combina resultados, tolera falha parcial e elimina duplicatas pelo ISBN canônico, preferindo ISBN-13, ou por provider/ID quando não há ISBN válido. ISBNs formatados são validados e convertidos para a forma canônica antes de uma consulta exata.
 
@@ -138,11 +140,13 @@ O Next.js envia Content Security Policy, `X-Content-Type-Options`, `X-Frame-Opti
 2. A busca consulta o catálogo local e a Open Library; se houver `GOOGLE_BOOKS_API_KEY`, também consulta o Google Books. Um ISBN válido favorece a consulta exata, e resultados de fontes diferentes são deduplicados sem comparar apenas título e autor.
 3. O leitor abre a confirmação de um resultado externo, confere os dados da edição e confirma a inclusão. Só então o frontend chama `POST /api/library/external` com `{ "externalProvider": "...", "externalId": "..." }`; a operação reutiliza o livro importado quando ele já existe.
 4. Se o livro não for encontrado, `POST /api/library/manual` aceita título obrigatório, autor opcional e ISBN opcional e cria um registro privado para o leitor.
-5. O leitor escolhe a unidade alcançada quando existe um pack; a página, quando informada, não muda o conhecimento.
+5. O leitor grava status, unidade e página em uma única atualização validada. A página não muda o conhecimento; limpar a unidade revoga o conteúdo antes liberado.
 6. Livros com pack oferecem personagens, facções, lugares, timeline, detalhe e Recall projetados para a ordem atual.
-7. Livros sem pack ainda oferecem status, página de referência e notas privadas, sem inferir ou gerar lore.
-8. Notas gerais ficam disponíveis ao dono; notas vinculadas acompanham a visibilidade da referência.
-9. A revisão seleciona deterministicamente até cinco entidades conhecidas e registra o feedback.
+7. Livros sem pack ainda oferecem os quatro status, página de referência e notas privadas, sem inferir ou gerar lore.
+8. A estante e o detalhe mostram os metadados bibliográficos persistidos daquela edição.
+9. Notas gerais ficam disponíveis ao dono; notas vinculadas acompanham a visibilidade da referência.
+10. A revisão seleciona deterministicamente até cinco entidades conhecidas e registra o feedback.
+11. Uma confirmação acessível precede a remoção; ao confirmar, progresso, notas e histórico de revisão daquela conta são apagados.
 
 ### Administração
 
@@ -175,6 +179,7 @@ Os prefixos `/api`, `/app` e `/admin` saem imediatamente do handler sem consulta
 - Cada proxy reverso confiável deve ter seu IP configurado em `Mnemora:KnownProxies`; headers encaminhados de proxies desconhecidos não devem participar das decisões de segurança.
 - Livros importados e manuais não recebem unidades ou lore automaticamente. Sem um memory pack, a interface mantém status, página e notas e oculta a navegação de personagens, lugares, timeline, Recall e revisão.
 - O cache de pesquisas externas é local a cada processo e pode ser descartado em reinícios. Ele reduz chamadas repetidas, mas não coordena múltiplas instâncias.
+- A remoção por livro limpa a memória pessoal associada àquela estante. Ela não substitui encerramento de conta, portabilidade nem uma política global de retenção de dados.
 - A segurança antisspoiler depende da curadoria de `ShortDescription` e `ImageUrl` para o primeiro ponto de conhecimento e da marcação correta de cada revelação. As validações impedem inconsistência temporal estrutural, mas não avaliam semanticamente o texto escrito por um Admin.
 - A PWA oferece o shell público offline. A área autenticada exige rede de propósito, para que progresso retrocedido e dados privados nunca sejam servidos de um cache local antigo.
 - Recuperação de senha, busca semântica, geração por IA e repetição espaçada são extensões futuras e não fazem parte deste MVP.

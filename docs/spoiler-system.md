@@ -17,6 +17,6 @@ flowchart TD
 
 Uma relação só aparece após sua unidade de revelação **e** quando suas duas entidades são conhecidas. A timeline usa apenas eventos conhecidos. O resumo inicial, nome e imagem de `LoreEntity` precisam ser seguros no primeiro ponto de conhecimento; fatos posteriores devem ficar em `LoreFact`. Unidades futuras usam `SafeLabel` público, e seu título completo só aparece ao alcançar a unidade.
 
-Atualizar o progresso recalcula o escopo em cada pedido. Retroceder revoga fatos; nenhuma resposta privada é cacheada. O painel Admin pode acessar o conteúdo completo, mas seu preview deve chamar a mesma projeção segura com uma unidade simulada.
+Atualizar o progresso recalcula o escopo em cada pedido. Retroceder revoga fatos; limpar `CurrentReadingUnitId` restaura o estado sem progresso, esvazia o conjunto conhecido e faz títulos anteriormente liberados voltarem a rótulos neutros na requisição seguinte. Nenhuma resposta privada é cacheada. O painel Admin pode acessar o conteúdo completo, mas seu preview deve chamar a mesma projeção segura com uma unidade simulada.
 
 Os testes cobrem fronteira antes/no/depois, estado sem progresso, avanço e retrocesso, alias e pistas futuras, fato/relação/entidade/evento futuros e endpoints REST. Mudanças no esquema de lore ou em qualquer consulta pública exigem repetir esses testes.

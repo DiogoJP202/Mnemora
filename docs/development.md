@@ -51,7 +51,19 @@ Se o livro não estiver nos resultados, `POST /api/library/manual` aceita títul
 }
 ```
 
-A biblioteca pertence à sessão autenticada (`GET /api/library`). O leitor adiciona um livro com `POST /api/library/{bookId}`, escolhe uma unidade com `PATCH /api/library/{bookId}/progress` e pode retroceder a qualquer momento. A página opcional é uma referência pessoal, sem efeito sobre a visibilidade do lore. Em `GET /api/books/{bookId}/reading-units`, títulos de unidades ainda não alcançadas são substituídos por rótulos neutros. O status “Finished” também não substitui uma unidade de progresso válida para o motor antisspoiler.
+A biblioteca pertence à sessão autenticada (`GET /api/library`). O leitor adiciona um livro com `POST /api/library/{bookId}` e grava status, unidade e página de forma atômica com `PATCH /api/library/{bookId}/progress`:
+
+```json
+{
+  "currentReadingUnitId": null,
+  "currentPage": 128,
+  "status": "Paused"
+}
+```
+
+Os três campos são opcionais no contrato: ausência preserva o valor atual e `null` explícito limpa unidade ou página. O endpoint valida o payload inteiro antes de alterar a linha, e o status explícito prevalece sobre a inferência automática de `Reading`. O frontend envia os três valores juntos. Limpar `currentReadingUnitId` mantém a página informativa, mas restaura o estado sem progresso e revoga o lore na consulta seguinte. Em `GET /api/books/{bookId}/reading-units`, títulos de unidades ainda não alcançadas são substituídos por rótulos neutros. O status `Finished` também não substitui uma unidade válida para o motor antisspoiler.
+
+`DELETE /api/library/{bookId}` remove, em transação, o vínculo, as notas e as atividades de revisão do usuário atual. Livros `Curated` e `Imported` permanecem no catálogo, assim como qualquer dado de outra conta. Um livro `Private` do proprietário só é removido do catálogo se ficar sem referências e sem unidades ou lore. A operação exige sessão, antiforgery e o rate limit de escritas de memória.
 
 Os DTOs de catálogo e biblioteca expõem `memoryPackAvailable`. Sem unidades de leitura, o livro continua aceitando mudança de status, página de referência e notas gerais; a interface não mostra navegação de lore, timeline, Recall ou revisão. Um provider externo ou cadastro manual nunca cria lore automaticamente.
 

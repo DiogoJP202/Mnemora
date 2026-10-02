@@ -20,6 +20,8 @@ O catálogo distingue packs curados, livros importados e livros privados. Um res
 
 O modelo persiste título, subtítulo, autor, capa, ISBN-10/ISBN-13, editora, data de publicação e idioma. Página total, categorias e rótulo de edição existem apenas na busca e na confirmação. Descrições e sinopses eventualmente devolvidas pelos providers são descartadas antes do DTO e nunca são persistidas como catálogo ou lore. A presença de unidades de leitura define `memoryPackAvailable`: sem pack, o leitor ainda gerencia status, página e notas, mas as superfícies de lore não são oferecidas.
 
+`UserBook` é a raiz do estado pessoal de acompanhamento. Uma única atualização pode gravar status, unidade e página depois de validar o payload completo; unidade nula produz `CurrentOrder = null` e volta a ocultar todo lore. Remover um livro usa uma transação para apagar o `UserBook`, as `UserNote` e as `UserRecallActivity` apenas daquele usuário. O `Book` compartilhado permanece no catálogo; um livro privado do proprietário só pode ser eliminado quando estiver órfão e sem unidades ou lore.
+
 O navegador solicita `/api` na mesma origem do frontend. Cookies HttpOnly não são lidos por JavaScript. Mutação requer token antiforgery; a API restringe CORS e aplica `no-store` a conteúdo autenticado. O Next.js entrega a landing pública e o app responsivo; telas privadas fazem leitura pela API sem cache compartilhado.
 
 ```mermaid
