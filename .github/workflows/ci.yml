@@ -67,8 +67,11 @@ jobs:
       - name: Test PWA boundaries
         run: node --test ../../tests/pwa/*.test.mjs
 
-      - name: Audit npm dependencies
-        run: npm audit --audit-level=high
+      - name: Test npm audit gate
+        run: node --test ../../tests/security/audit-npm.test.mjs
+
+      - name: Audit npm dependencies (reviewed development exception)
+        run: node ../../scripts/audit-npm.mjs
 
   container:
     name: Container image

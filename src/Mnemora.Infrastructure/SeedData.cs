@@ -65,7 +65,11 @@ public static class SeedData
             Language = "pt-BR",
             ExternalProvider = "MnemoraSeed",
             ExternalId = "mist-archive-v1",
-            CatalogKind = BookCatalogKind.Curated
+            CatalogKind = BookCatalogKind.Curated,
+            ReadingOutlineStatus = EditorialContentStatus.Published,
+            LoreStatus = EditorialContentStatus.Published,
+            ReadingOutlinePublishedAt = DateTime.UtcNow,
+            LorePublishedAt = DateTime.UtcNow
         };
         db.Books.Add(book);
         await db.SaveChangesAsync();

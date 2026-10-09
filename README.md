@@ -2,7 +2,7 @@
 
 > **Remember the story. Not the spoilers.**
 
-Mnemora é um companion de leitura mobile-first para recordar personagens, lugares, facções, relações e acontecimentos sem ultrapassar o ponto atual do leitor. A aplicação também oferece biblioteca pessoal com gestão de status e remoção segura, busca de livros por título, autor ou ISBN, cadastro manual, progresso por unidade de leitura que pode ser limpo, notas privadas, revisão curta de entidades conhecidas, catálogo e uma área administrativa para criar packs de lore.
+Mnemora é um companion de leitura mobile-first para recordar personagens, lugares, facções, relações e acontecimentos sem ultrapassar o ponto atual do leitor. A aplicação também oferece biblioteca pessoal com gestão de status e remoção segura, busca de livros por título, autor ou ISBN, cadastro manual, progresso por unidade de leitura que pode ser limpo, notas privadas, revisão curta de entidades conhecidas, solicitação de memory packs e uma área administrativa com fluxo editorial de preparação e publicação.
 
 O projeto é uma PWA em português (`pt-BR`) e usa um universo fictício original no conteúdo demonstrativo.
 
@@ -204,6 +204,15 @@ Valide o manifesto, os tamanhos dos ícones e as regras de cache da PWA a partir
 node --test tests/pwa/pwa-assets.test.mjs
 ```
 
+Execute também o gate de segurança das dependências e seus testes, a partir da raiz:
+
+```powershell
+node scripts/audit-npm.mjs
+node --test tests/security/audit-npm.test.mjs
+```
+
+O gate consulta a auditoria npm completa e bloqueia achados `high`/`critical`, com uma exceção temporária restrita à cadeia de desenvolvimento de `eslint-config-next` que usa `braces` 3.0.3 (`GHSA-vfj7-8cjw-p6xm`). Ela verifica advisory, versões, caminho e classificação `dev-only`, e expira no início de 9 de novembro de 2026 (UTC). O ambiente de execução tem auditoria sem vulnerabilidades após a atualização de `sharp` para 0.35.5 e `source-map-js` para 1.2.2; o relatório completo ainda apresenta o aviso de desenvolvimento sem patch compatível. A justificativa, os limites e a remoção da exceção estão em [docs/dependency-security.md](docs/dependency-security.md).
+
 O service worker só é registrado quando `NODE_ENV=production`. Para testar instalação e cache localmente, mantenha a API ativa e execute:
 
 ```powershell
@@ -226,6 +235,8 @@ src/Mnemora.Domain/          entidades e enums do domínio
 src/Mnemora.Infrastructure/  EF Core, Identity, consultas, seed e providers de livros
 tests/Mnemora.Tests/         testes unitários e de integração da API
 tests/pwa/                   testes do manifesto, ícones e service worker
+tests/security/              testes do gate de auditoria npm
+scripts/                     gate de segurança de dependências
 docs/                        arquitetura, domínio, desenvolvimento e antisspoiler
 ```
 
@@ -239,12 +250,12 @@ Todos os endpoints vivem sob `/api`. Rotas de escrita exigem `X-CSRF-TOKEN`; as 
 | Autenticação | `GET /api/auth/csrf`, `POST /api/auth/register`, `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` |
 | Catálogo | `GET /api/books`, `GET /api/books/search?q=...`, `GET /api/books/{bookId}` |
 | Biblioteca | `GET /api/library`, `POST/DELETE /api/library/{bookId}`, `POST /api/library/external`, `POST /api/library/manual`, `PATCH /api/library/{bookId}/progress`, `PATCH /api/library/{bookId}/status` |
-| Livro autenticado | `GET /api/books/{bookId}/reading-units`, `GET /api/books/{bookId}/overview` |
+| Livro autenticado | `GET /api/books/{bookId}/reading-units`, `GET /api/books/{bookId}/overview`, `POST /api/books/{bookId}/memory-pack-request` |
 | Lore seguro | `GET /api/books/{bookId}/entities`, `/factions`, `/locations`, `/timeline`, `GET /api/entities/{entityId}` |
 | Recall | `GET /api/books/{bookId}/recall?q=...` |
 | Notas | `GET/POST /api/books/{bookId}/notes`, `PUT/DELETE /api/notes/{noteId}` |
 | Revisão | `GET /api/books/{bookId}/review`, `POST /api/books/{bookId}/review/{entityId}` |
-| Administração | `/api/admin/books`, `/api/admin/books/{bookId}/reading-units`, `/api/admin/books/{bookId}/entities`, `/api/admin/entities/{entityId}`, aliases, fatos, relações e previews seguros |
+| Administração | `/api/admin/books`, workflow `/memory-pack/*`, consulta/importação de `/reading-outline/*`, unidades, entidades, aliases, fatos, relações e previews seguros |
 
 O formulário do livro grava `status`, `currentReadingUnitId` e `currentPage` em uma única chamada a `PATCH /api/library/{bookId}/progress`. Campos ausentes preservam o valor atual; `null` explícito limpa unidade ou página, e todos os valores são validados antes de qualquer mutação. Um status explícito prevalece sobre a inferência automática de `Reading`. Selecionar “Nenhuma — limpar ponto de leitura” restaura o escopo sem progresso e revoga imediatamente o lore anteriormente visível; marcar `Finished` nunca concede conhecimento por conta própria.
 
@@ -260,12 +271,17 @@ A importação persiste somente os campos que já pertencem a `Book`: título, s
 
 Quando a busca não encontra o livro, `POST /api/library/manual` aceita `{ "title": "...", "author": "...", "isbn": "..." }`. Apenas `title` é obrigatório; autor e ISBN são opcionais. O ISBN, quando presente, aceita formatação comum, precisa ter dígito verificador válido e é armazenado na forma normalizada. O livro manual pertence ao leitor que o criou e não aparece para outras contas.
 
-Cada DTO de livro informa `memoryPackAvailable`. Todo livro aceita os quatro status de leitura, página de referência e notas privadas. Quando há um pack, a unidade escolhida controla a visibilidade e pode ser limpa sem remover o livro. Personagens, lugares, timeline, Recall e revisão só ficam disponíveis quando houver unidades e lore curados; metadados importados ou manuais nunca são convertidos automaticamente em memória da história.
+Cada DTO de livro separa `readingOutlineAvailable` de `memoryPackAvailable` e informa `memoryPackStatus` (`Unavailable`, `Requested`, `Preparing` ou `Available`) e `canRequestMemoryPack`. Todo livro aceita os quatro status de leitura, página de referência e notas privadas. Um índice publicado já permite escolher a unidade e registrar progresso, mesmo enquanto o lore está em preparação. Personagens, facções, lugares, timeline, Recall e revisão só ficam disponíveis quando o índice e o lore foram publicados e existe conteúdo editorial. Sem pack, o leitor pode solicitar a preparação de um livro compartilhado da sua biblioteca; existe no máximo um pedido pendente por usuário e livro, e repetições são idempotentes. O painel Admin prioriza livros com mais solicitações. Livros manuais privados não entram nessa fila.
+
+O Admin prepara separadamente o índice e o conhecimento. Unidades e lore só podem ser alterados em rascunho; a publicação valida hierarquia, slugs, ordem e pontos de revelação. Despublicar o índice também recolhe o lore publicado, e publicar o lore limpa as solicitações pendentes daquele livro. Para edições exatas da Open Library (`OL…M`), o painel pode consultar o campo opcional `table_of_contents`, revisar a prévia e importar até 200 itens como unidades hierárquicas com rótulos neutros. Um sumário com mais de 200 itens válidos é rejeitado integralmente com `422`, sem truncamento nem criação de um índice parcial. A operação registra fonte e atribuição e é idempotente quando o rascunho existente tem os mesmos títulos. Nem a Open Library nem o Google Books fornecem personagens, relações, eventos ou pontos de revelação confiáveis; esse conhecimento continua sendo escrito e revisado por uma pessoa.
+
+A migration `MemoryPackWorkflow` preserva como publicados os índices e o lore já existentes em bancos anteriores. Novas importações e cadastros manuais começam sem conteúdo editorial; livros criados pelo Admin começam em rascunho. O seed original é publicado explicitamente.
 
 ## Limitações do MVP
 
 - recuperação de senha ainda apresenta apenas uma orientação na interface;
-- livros importados ou cadastrados manualmente permitem organizar status, página e notas, mas não ganham um pack de lore automaticamente;
+- livros importados permitem organizar status, página e notas e podem receber um índice da Open Library quando a edição oferece sumário, mas o lore continua dependendo de curadoria e publicação administrativas;
+- livros cadastrados manualmente são privados, não entram na fila de solicitações e não ganham um pack automaticamente;
 - a busca é textual; busca semântica e recursos de IA não fazem parte desta versão;
 - a revisão registra “Eu lembro” ou “Preciso revisar”, sem agendamento por repetição espaçada;
 - SQLite atende ao uso local e a uma implantação simples, sem a estratégia operacional de um banco multi-instância;
@@ -282,6 +298,7 @@ As evoluções candidatas estão registradas em [future.md](future.md).
 - [Modelo de domínio](docs/domain-model.md)
 - [Motor antisspoiler](docs/spoiler-system.md)
 - [Guia de desenvolvimento](docs/development.md)
+- [Segurança de dependências](docs/dependency-security.md)
 - [Implantação no Render](docs/deployment.md)
 - [Arquitetura técnica](docs/technical-architecture.md)
 - [Relatório final](docs/final-report.md)

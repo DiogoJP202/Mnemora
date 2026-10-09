@@ -184,10 +184,20 @@ public sealed class LibraryEndpointTests
             var db = scope.ServiceProvider.GetRequiredService<MnemoraDbContext>();
             db.Books.AddRange(ready, empty, imported);
             await db.SaveChangesAsync();
-            db.ReadingUnits.Add(new ReadingUnit
+            var unit = new ReadingUnit
             {
                 BookId = ready.Id, Title = "Começo", SafeLabel = "Capítulo 1",
                 Slug = "capitulo-1", OrderIndex = 10
+            };
+            db.ReadingUnits.Add(unit);
+            await db.SaveChangesAsync();
+            db.LoreEntities.Add(new LoreEntity
+            {
+                BookId = ready.Id,
+                FirstKnownAtUnitId = unit.Id,
+                Type = LoreEntityType.Character,
+                Name = "Nara",
+                Slug = "nara"
             });
             await db.SaveChangesAsync();
         }

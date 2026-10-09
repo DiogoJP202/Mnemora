@@ -1,3 +1,5 @@
+export type MemoryPackStatus = "Unavailable" | "Requested" | "Preparing" | "Available";
+
 export type Book = {
   id: string;
   title: string;
@@ -11,6 +13,9 @@ export type Book = {
   publishedDate: string | null;
   language: string | null;
   memoryPackAvailable: boolean;
+  readingOutlineAvailable: boolean;
+  memoryPackStatus: MemoryPackStatus;
+  canRequestMemoryPack: boolean;
 };
 
 export type SearchBook = {
@@ -31,6 +36,9 @@ export type SearchBook = {
   categories: string[] | null;
   edition: string | null;
   memoryPackAvailable: boolean;
+  readingOutlineAvailable: boolean;
+  memoryPackStatus: MemoryPackStatus;
+  canRequestMemoryPack: boolean;
 };
 
 export type LibraryBook = {

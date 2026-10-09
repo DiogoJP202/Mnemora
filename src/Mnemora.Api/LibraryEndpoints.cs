@@ -99,6 +99,8 @@ public static class LibraryEndpoints
                     ExternalProvider = providerName,
                     ExternalId = externalId,
                     CatalogKind = BookCatalogKind.Imported,
+                    ReadingOutlineStatus = EditorialContentStatus.None,
+                    LoreStatus = EditorialContentStatus.None,
                     // External descriptions may contain spoilers, so they are never imported.
                     Description = null
                 };
@@ -208,7 +210,9 @@ public static class LibraryEndpoints
                         Isbn10 = isbn.Isbn10,
                         Isbn13 = isbn.Isbn13,
                         CatalogKind = BookCatalogKind.Private,
-                        OwnerUserId = userId
+                        OwnerUserId = userId,
+                        ReadingOutlineStatus = EditorialContentStatus.None,
+                        LoreStatus = EditorialContentStatus.None
                     };
                     db.Books.Add(book);
                     await db.SaveChangesAsync(cancellationToken);
@@ -264,6 +268,9 @@ public static class LibraryEndpoints
             await db.UserRecallActivities.Where(x =>
                     x.UserId == userId && x.BookId == bookId)
                 .ExecuteDeleteAsync(cancellationToken);
+            await db.MemoryPackRequests.Where(x =>
+                    x.UserId == userId && x.BookId == bookId)
+                .ExecuteDeleteAsync(cancellationToken);
             await db.UserBooks.Where(x => x.UserId == userId && x.BookId == bookId)
                 .ExecuteDeleteAsync(cancellationToken);
 
@@ -315,9 +322,15 @@ public static class LibraryEndpoints
             }
             if (currentPage is <= 0)
                 return Results.BadRequest("Página de referência inválida.");
-            if (unitId is Guid selectedUnit
-                && !await db.ReadingUnits.AnyAsync(x => x.Id == selectedUnit && x.BookId == bookId))
-                return Results.BadRequest("Unidade de leitura inválida para este livro.");
+            if (hasUnit && unitId is Guid selectedUnit)
+            {
+                var outlinePublished = await db.Books.AsNoTracking().AnyAsync(x =>
+                    x.Id == bookId
+                    && x.ReadingOutlineStatus == EditorialContentStatus.Published);
+                if (!outlinePublished || !await db.ReadingUnits.AnyAsync(x =>
+                        x.Id == selectedUnit && x.BookId == bookId))
+                    return Results.BadRequest("Unidade de leitura inválida para este livro.");
+            }
             var unitChanged = hasUnit && unitId != row.CurrentReadingUnitId;
             var pageChanged = hasPage && currentPage != row.CurrentPage;
             row.CurrentReadingUnitId = unitId;
@@ -366,11 +379,16 @@ public static class LibraryEndpoints
         var book = await db.Books.AsNoTracking().FirstAsync(x => x.Id == row.BookId);
         var unitIds = await db.ReadingUnits.AsNoTracking().Where(x => x.BookId == row.BookId)
             .OrderBy(x => x.OrderIndex).Select(x => x.Id).ToListAsync();
+        var hasLore = await db.LoreEntities.AsNoTracking()
+            .AnyAsync(x => x.BookId == row.BookId);
+        var requested = await db.MemoryPackRequests.AsNoTracking().AnyAsync(x =>
+            x.BookId == row.BookId && x.UserId == row.UserId);
         var index = row.CurrentReadingUnitId is Guid current
             ? unitIds.IndexOf(current) : -1;
         var percentage = index < 0 || unitIds.Count == 0
             ? 0 : (int)Math.Round(100.0 * (index + 1) / unitIds.Count);
-        return new LibraryBookDto(CatalogDto.From(book, unitIds.Count > 0), row.Status.ToString(),
+        return new LibraryBookDto(CatalogDto.From(
+                book, unitIds.Count > 0, hasLore, requested), row.Status.ToString(),
             row.CurrentReadingUnitId, row.CurrentPage, percentage);
     }
 

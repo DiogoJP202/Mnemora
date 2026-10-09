@@ -11,15 +11,24 @@ public static class AdminRelationEndpoints
     {
         var admin = app.MapGroup("/api/admin").RequireAuthorization("Admin").WithTags("Admin Relations");
 
-        admin.MapGet("/books/{bookId:guid}/relations", async (Guid bookId, MnemoraDbContext db) =>
-            Results.Ok(await db.LoreRelations.AsNoTracking().Where(x => x.BookId == bookId)
+        admin.MapGet("/books/{bookId:guid}/relations", async (
+            Guid bookId, MnemoraDbContext db) =>
+        {
+            if (await AdminBookEndpoints.AdminBookAsync(
+                    db, bookId, asTracking: false) is null)
+                return Results.NotFound();
+            return Results.Ok(await db.LoreRelations.AsNoTracking()
+                .Where(x => x.BookId == bookId)
                 .OrderBy(x => x.CreatedAt).Select(x => new RelationDto(x.Id, x.BookId,
                     x.SourceEntityId, x.TargetEntityId, x.RelationType,
-                    x.Label, x.RevealAtUnitId)).ToListAsync()));
+                    x.Label, x.RevealAtUnitId)).ToListAsync());
+        });
 
         admin.MapPost("/books/{bookId:guid}/relations", async (
             Guid bookId, RelationWrite request, MnemoraDbContext db) =>
         {
+            if (await AdminBookEndpoints.EditableLoreBookAsync(db, bookId) is null)
+                return await AdminBookEndpoints.LoreDraftOrNotFoundAsync(db, bookId);
             var error = await ValidateAsync(db, bookId, request);
             if (error is not null) return error;
             var relation = ToRelation(bookId, request);
@@ -33,6 +42,10 @@ public static class AdminRelationEndpoints
         {
             var relation = await db.LoreRelations.FindAsync(relationId);
             if (relation is null) return Results.NotFound();
+            if (await AdminBookEndpoints.EditableLoreBookAsync(
+                    db, relation.BookId) is null)
+                return await AdminBookEndpoints.LoreDraftOrNotFoundAsync(
+                    db, relation.BookId);
             var error = await ValidateAsync(db, relation.BookId, request);
             if (error is not null) return error;
             relation.SourceEntityId = request.SourceEntityId;
@@ -49,6 +62,10 @@ public static class AdminRelationEndpoints
         {
             var relation = await db.LoreRelations.FindAsync(relationId);
             if (relation is null) return Results.NotFound();
+            if (await AdminBookEndpoints.EditableLoreBookAsync(
+                    db, relation.BookId) is null)
+                return await AdminBookEndpoints.LoreDraftOrNotFoundAsync(
+                    db, relation.BookId);
             db.LoreRelations.Remove(relation);
             await db.SaveChangesAsync();
             return Results.NoContent();

@@ -11,20 +11,36 @@ public sealed class KnowledgeReader(MnemoraDbContext db)
 {
     public async Task<KnowledgeScope?> ScopeAsync(Guid userId, Guid bookId)
     {
-        var libraryBook = await db.UserBooks.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.UserId == userId && x.BookId == bookId);
-        if (libraryBook is null) return null;
+        var scope = await LibraryScopeAsync(userId, bookId);
+        return scope is { LoreAvailable: true } ? scope : null;
+    }
+
+    public async Task<KnowledgeScope?> LibraryScopeAsync(Guid userId, Guid bookId)
+    {
+        var access = await (from library in db.UserBooks.AsNoTracking()
+            join book in db.Books.AsNoTracking() on library.BookId equals book.Id
+            where library.UserId == userId && library.BookId == bookId
+                && (book.CatalogKind != BookCatalogKind.Private
+                    || book.OwnerUserId == userId)
+            select new { Library = library, Book = book }).FirstOrDefaultAsync();
+        if (access is null) return null;
+        var hasUnits = access.Book.ReadingOutlineStatus
+            == EditorialContentStatus.Published
+            && await db.ReadingUnits.AsNoTracking().AnyAsync(x => x.BookId == bookId);
+        var loreAvailable = hasUnits
+            && access.Book.LoreStatus == EditorialContentStatus.Published
+            && await db.LoreEntities.AsNoTracking().AnyAsync(x => x.BookId == bookId);
         int? order = null;
-        if (libraryBook.CurrentReadingUnitId is Guid unitId)
+        if (hasUnits && access.Library.CurrentReadingUnitId is Guid unitId)
             order = await db.ReadingUnits.AsNoTracking()
                 .Where(x => x.Id == unitId && x.BookId == bookId)
                 .Select(x => (int?)x.OrderIndex).FirstOrDefaultAsync();
-        return new KnowledgeScope(userId, bookId, order);
+        return new KnowledgeScope(userId, bookId, order, loreAvailable);
     }
 
     public IQueryable<LoreEntity> KnownEntities(KnowledgeScope scope)
     {
-        if (scope.CurrentOrder is not int order)
+        if (!scope.LoreAvailable || scope.CurrentOrder is not int order)
             return db.LoreEntities.Where(_ => false);
         return from entity in db.LoreEntities.AsNoTracking()
                join unit in db.ReadingUnits.AsNoTracking()

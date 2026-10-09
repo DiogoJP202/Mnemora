@@ -315,3 +315,48 @@ input::placeholder, textarea::placeholder { color: var(--ink-soft); opacity: .82
   .shelf-removal-actions { display: grid; grid-template-columns: 1fr; }
   .shelf-removal-actions .button { width: 100%; }
 }
+
+/* Memory-pack requests and editorial publishing */
+.book-lore-nav a { position: relative; }
+.book-lore-nav a.book-lore-nav-preparing { border-style: dashed; color: var(--ink-soft); }
+.memory-pack-state { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(260px, .8fr); gap: clamp(28px, 5vw, 70px); margin: 28px 0; padding: clamp(28px, 5vw, 52px); border: 1px solid var(--line); background: var(--surface-tint); }
+.memory-pack-state-copy h2 { max-width: 650px; margin: 10px 0 12px; font-family: Georgia, serif; font-size: clamp(30px, 4vw, 46px); font-weight: 400; letter-spacing: -.045em; line-height: 1.06; }
+.memory-pack-state-copy > p { max-width: 680px; margin: 0; color: var(--ink-soft); line-height: 1.65; }
+.memory-pack-outline-note { margin-top: 16px !important; padding-left: 14px; border-left: 2px solid var(--olive); color: var(--ink) !important; font-size: 13px; }
+.memory-pack-state .pack-unavailable-actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 24px; }
+.memory-pack-features { display: grid; align-content: start; gap: 0; margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.memory-pack-features li { display: grid; grid-template-columns: 35px 1fr; gap: 10px; padding: 15px 0; border-bottom: 1px solid var(--line); color: var(--ink); font-family: Georgia, serif; line-height: 1.35; }
+.memory-pack-features li span { color: var(--olive); font-family: ui-monospace, monospace; font-size: 10px; letter-spacing: .08em; }
+.admin-pack-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; }
+.admin-request-count { background: var(--surface-tint-strong); color: var(--olive); }
+.admin-pack-counts { display: grid; grid-template-columns: repeat(5, minmax(55px, 1fr)); gap: 8px; margin: 0; }
+.admin-pack-counts > div { min-width: 60px; padding: 9px; border-left: 1px solid var(--line); text-align: center; }
+.admin-pack-counts dt { color: var(--ink-soft); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.admin-pack-counts dd { margin: 4px 0 0; font-family: Georgia, serif; font-size: 21px; }
+.admin-workflow-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin: 0; padding: 0; list-style: none; }
+.admin-workflow-steps li { display: grid; align-content: start; gap: 13px; padding: 18px; border: 1px solid var(--line); background: var(--paper); }
+.admin-workflow-steps li.is-published { border-color: var(--olive); }
+.admin-workflow-steps li > div:first-child { display: flex; align-items: center; gap: 10px; }
+.admin-workflow-steps li > div:first-child span { display: grid; place-items: center; width: 25px; height: 25px; border-radius: 50%; background: var(--surface-tint-strong); color: var(--olive); font-size: 11px; }
+.admin-workflow-steps p { margin: 0; color: var(--ink-soft); font-size: 13px; }
+.admin-edition-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.admin-edition-grid dt { color: var(--ink-soft); font-size: 9px; letter-spacing: .1em; text-transform: uppercase; }
+.admin-edition-grid dd { overflow-wrap: anywhere; margin: 4px 0 0; font-family: Georgia, serif; }
+
+@media (max-width: 820px) {
+  .memory-pack-state { grid-template-columns: 1fr; }
+  .admin-pack-row { grid-template-columns: 1fr; }
+  .admin-pack-counts { width: 100%; }
+  .admin-pack-counts > div:first-child { border-left: 0; }
+  .admin-workflow-steps { grid-template-columns: 1fr; }
+  .admin-edition-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 520px) {
+  .memory-pack-state { padding: 24px 18px; }
+  .memory-pack-state .pack-unavailable-actions { display: grid; }
+  .memory-pack-state .button { width: 100%; }
+  .admin-pack-counts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-pack-counts > div { border: 0; border-top: 1px solid var(--line); }
+  .admin-edition-grid { grid-template-columns: 1fr; }
+}

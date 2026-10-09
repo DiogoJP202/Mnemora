@@ -52,7 +52,7 @@ export function LoreCollection({ bookId, config }: { bookId: string; config: Col
     <Link href={`/app/books/${bookId}`} className="back-link">← Voltar ao livro</Link>
     <div className="lore-page-head"><span className="section-index">{book?.title ?? "EXPLORAR O LIVRO"}</span><h1>{config.title} <em>{config.emphasis}</em></h1><p>{config.intro}</p></div>
     <BookLoreNav bookId={bookId} active={config.segment} memoryPackAvailable={book?.memoryPackAvailable ?? false} />
-    {book && !book.memoryPackAvailable ? <MemoryPackUnavailable bookId={bookId} /> : <>
+    {book && !book.memoryPackAvailable ? <MemoryPackUnavailable bookId={bookId} initialStatus={book.memoryPackStatus} canRequest={book.canRequestMemoryPack} outlineAvailable={book.readingOutlineAvailable} /> : <>
       {error && <div className="form-alert" role="alert">{error}<button type="button" onClick={() => { setEntities(null); setError(null); setRetry((value) => value + 1); }}>Tentar novamente</button></div>}
       {!entities && !error && <div className="lore-grid" role="status"><span className="sr-only">Carregando conhecimento…</span><div className="lore-card skeleton" /><div className="lore-card skeleton" /></div>}
       {entities?.length === 0 && <div className="empty-state compact lore-empty"><div className="empty-symbol" aria-hidden="true">◇</div><h2>{hasProgress ? `Nenhum ${config.emptyNoun} encontrado.` : "Comece pela sua leitura."}</h2><p>{hasProgress ? "Não encontrei lembranças deste tipo dentro do que você já leu." : "Marque a unidade onde você parou para explorar somente o que já conhece."}</p><Link href={`/app/books/${bookId}`} className="button button-outline">{hasProgress ? "Voltar ao livro" : "Marcar meu progresso"} <span aria-hidden="true">↗</span></Link></div>}

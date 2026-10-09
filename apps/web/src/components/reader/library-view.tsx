@@ -97,7 +97,15 @@ export function LibraryView() {
             {books.map((item) => {
               const progress = Math.max(0, Math.min(100, item.progressPercentage ?? 0));
               const packAvailable = item.book.memoryPackAvailable;
+              const outlineAvailable = item.book.readingOutlineAvailable;
               const metadata = compactMetadata(item.book);
+              const memoryLabel = packAvailable
+                ? "Memória disponível"
+                : item.book.memoryPackStatus === "Preparing"
+                  ? outlineAvailable ? "Índice disponível" : "Em preparação"
+                  : item.book.memoryPackStatus === "Requested"
+                    ? "Pacote solicitado"
+                    : "Somente estante";
 
               return (
                 <Link
@@ -109,6 +117,9 @@ export function LibraryView() {
                   <div className="book-card-info">
                     <span className="book-status">
                       {statusLabel[item.status] ?? item.status}
+                    </span>
+                    <span className={`pack-label${packAvailable ? " pack-label-ready" : ""}`}>
+                      {memoryLabel}
                     </span>
                     <h2>{item.book.title}</h2>
                     {item.book.subtitle && (
@@ -123,7 +134,7 @@ export function LibraryView() {
                       </div>
                     )}
 
-                    {packAvailable ? (
+                    {outlineAvailable ? (
                       <div className="book-progress">
                         <div
                           className="book-progress-track"
@@ -148,7 +159,7 @@ export function LibraryView() {
                             ? `Página ${item.currentPage}`
                             : "Página ainda não informada"}
                         </span>
-                        <small>Somente estante</small>
+                        <small>{memoryLabel}</small>
                       </div>
                     )}
                   </div>

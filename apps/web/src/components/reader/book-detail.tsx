@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { apiGet, apiWrite } from "@/lib/api";
 import { BookCover } from "@/components/reader/book-cover";
 import { BookLoreNav } from "@/components/reader/book-lore-nav";
+import { MemoryPackUnavailable } from "@/components/reader/memory-pack-unavailable";
 import { detailMetadata } from "@/components/reader/book-metadata";
 import type { Book, LibraryBook, ReadingUnit } from "@/lib/reader-types";
 
@@ -55,7 +56,7 @@ export function BookDetail({ bookId }: { bookId: string }) {
         setPage(foundItem?.currentPage?.toString() ?? "");
         setStatus(foundItem?.status ?? "WantToRead");
 
-        if (foundItem && foundBook.memoryPackAvailable) {
+        if (foundItem && foundBook.readingOutlineAvailable) {
           const readingUnits = await apiGet<ReadingUnit[]>(
             `/api/books/${bookId}/reading-units`,
           );
@@ -94,7 +95,7 @@ export function BookDetail({ bookId }: { bookId: string }) {
       setStatus(item.status);
       setMessage("Livro adicionado à sua biblioteca.");
 
-      if (item.book.memoryPackAvailable) {
+      if (item.book.readingOutlineAvailable) {
         try {
           setUnits(
             await apiGet<ReadingUnit[]>(`/api/books/${bookId}/reading-units`),
@@ -132,7 +133,9 @@ export function BookDetail({ bookId }: { bookId: string }) {
         `/api/library/${bookId}/progress`,
         "PATCH",
         {
-          currentReadingUnitId: book?.memoryPackAvailable ? unitId || null : null,
+          ...(book?.readingOutlineAvailable
+            ? { currentReadingUnitId: unitId || null }
+            : {}),
           currentPage,
           status,
         },
@@ -143,12 +146,12 @@ export function BookDetail({ bookId }: { bookId: string }) {
       setPage(updated.currentPage?.toString() ?? "");
       setStatus(updated.status);
       setMessage(
-        book?.memoryPackAvailable
+        book?.readingOutlineAvailable
           ? "Seu ponto de leitura e status foram atualizados."
           : "O acompanhamento deste livro foi atualizado.",
       );
 
-      if (book?.memoryPackAvailable) {
+      if (book?.readingOutlineAvailable) {
         setUnits([]);
         try {
           setUnits(
@@ -216,7 +219,15 @@ export function BookDetail({ bookId }: { bookId: string }) {
 
   const progress = Math.max(0, Math.min(100, libraryItem?.progressPercentage ?? 0));
   const packAvailable = book.memoryPackAvailable;
+  const outlineAvailable = book.readingOutlineAvailable;
   const metadata = detailMetadata(book);
+  const packLabel = book.memoryPackStatus === "Available"
+    ? "MEMÓRIA DISPONÍVEL"
+    : book.memoryPackStatus === "Preparing"
+      ? outlineAvailable ? "ÍNDICE DISPONÍVEL" : "EM PREPARAÇÃO"
+      : book.memoryPackStatus === "Requested"
+        ? "PACOTE SOLICITADO"
+        : "SOMENTE ESTANTE";
 
   return (
     <div className="reader-page book-detail-page">
@@ -230,7 +241,7 @@ export function BookDetail({ bookId }: { bookId: string }) {
           <span
             className={`book-pack-badge${packAvailable ? " book-pack-badge-ready" : ""}`}
           >
-            {packAvailable ? "PACOTE DE MEMÓRIA" : "SOMENTE ESTANTE"}
+            {packLabel}
           </span>
           <h1>{book.title}</h1>
           {book.subtitle && <p className="book-subtitle">{book.subtitle}</p>}
@@ -248,7 +259,7 @@ export function BookDetail({ bookId }: { bookId: string }) {
           )}
 
           {libraryItem ? (
-            packAvailable ? (
+            outlineAvailable ? (
               <div className="current-progress">
                 <span>SEU PROGRESSO</span>
                 <strong>
@@ -303,16 +314,29 @@ export function BookDetail({ bookId }: { bookId: string }) {
         <BookLoreNav bookId={bookId} active="" memoryPackAvailable={packAvailable} />
       )}
 
+      {libraryItem && !packAvailable && (
+        <MemoryPackUnavailable
+          bookId={bookId}
+          initialStatus={book.memoryPackStatus}
+          canRequest={book.canRequestMemoryPack}
+          outlineAvailable={outlineAvailable}
+          onRequested={() => setBook({
+            ...book,
+            memoryPackStatus: "Requested",
+          })}
+        />
+      )}
+
       {libraryItem && (
         <>
           <div className="reading-layout">
             <section className="reading-card">
               <div className="reading-card-head">
                 <span className="section-index">
-                  {packAvailable ? "PONTO DE LEITURA" : "SOMENTE ESTANTE"}
+                  {outlineAvailable ? "PONTO DE LEITURA" : "SOMENTE ESTANTE"}
                 </span>
                 <h2>
-                  {packAvailable ? (
+                  {outlineAvailable ? (
                     <>
                       Onde você <em>parou?</em>
                     </>
@@ -323,13 +347,15 @@ export function BookDetail({ bookId }: { bookId: string }) {
                   )}
                 </h2>
                 <p>
-                  {packAvailable
-                    ? "Seu ponto determina o que Mnemora pode mostrar sobre a história. Você pode avançar, voltar ou limpar esse ponto quando quiser."
+                  {outlineAvailable
+                    ? packAvailable
+                      ? "Seu ponto determina o que Mnemora pode mostrar sobre a história. Você pode avançar, voltar ou limpar esse ponto quando quiser."
+                      : "Use as unidades publicadas para guardar seu ponto. O conhecimento da história continua fechado enquanto o pacote é revisado."
                     : "Este livro ainda não tem personagens e acontecimentos preparados pelo Mnemora. Você pode guardar o status, a página e suas notas."}
                 </p>
               </div>
 
-              {packAvailable && units.length === 0 && (
+              {outlineAvailable && units.length === 0 && (
                 <div className="pack-empty">
                   <span aria-hidden="true">◫</span>
                   <h3>As unidades não estão disponíveis agora.</h3>
@@ -356,7 +382,7 @@ export function BookDetail({ bookId }: { bookId: string }) {
                   </select>
                 </div>
 
-                {packAvailable && units.length > 0 && (
+                {outlineAvailable && units.length > 0 && (
                   <div className="field">
                     <label htmlFor="reading-unit">
                       Unidade de leitura <span>(opcional)</span>
@@ -401,7 +427,7 @@ export function BookDetail({ bookId }: { bookId: string }) {
                     aria-describedby="current-page-help"
                   />
                   <span id="current-page-help" className="field-help">
-                    {packAvailable
+                    {outlineAvailable
                       ? "A página é uma referência pessoal; spoilers seguem a unidade de leitura."
                       : "Use a página como referência pessoal. Ela não libera conteúdo de memória."}
                   </span>
@@ -420,14 +446,16 @@ export function BookDetail({ bookId }: { bookId: string }) {
 
             <aside className="reading-aside">
               <span className="section-index">
-                {packAvailable ? "LER SEM PRESSA" : "SEU ESPAÇO"}
+                 {outlineAvailable ? "LER SEM PRESSA" : "SEU ESPAÇO"}
               </span>
               <p>
-                {packAvailable
-                  ? "O que vem depois continua guardado. Mnemora mostra o que sua história já contou."
+                {outlineAvailable
+                  ? packAvailable
+                    ? "O que vem depois continua guardado. Mnemora mostra o que sua história já contou."
+                    : "Os títulos futuros ficam neutros, e o conhecimento só será aberto depois da revisão editorial."
                   : "Mesmo sem pacote de memória, suas notas continuam privadas e ligadas a este livro."}
               </p>
-              <span aria-hidden="true">{packAvailable ? "✳" : "✎"}</span>
+              <span aria-hidden="true">{outlineAvailable ? "✳" : "✎"}</span>
             </aside>
           </div>
 

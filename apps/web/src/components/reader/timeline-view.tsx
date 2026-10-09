@@ -46,7 +46,7 @@ export function TimelineView({ bookId }: { bookId: string }) {
     <Link href={`/app/books/${bookId}`} className="back-link">← Voltar ao livro</Link>
     <div className="lore-page-head"><span className="section-index">{book?.title ?? "EXPLORAR O LIVRO"}</span><h1>Sua história, <em>até aqui.</em></h1><p>Os acontecimentos aparecem na ordem da narrativa e param exatamente no seu ponto de leitura.</p></div>
     <BookLoreNav bookId={bookId} active="/timeline" memoryPackAvailable={book?.memoryPackAvailable ?? false} />
-    {book && !book.memoryPackAvailable ? <MemoryPackUnavailable bookId={bookId} /> : <>
+    {book && !book.memoryPackAvailable ? <MemoryPackUnavailable bookId={bookId} initialStatus={book.memoryPackStatus} canRequest={book.canRequestMemoryPack} outlineAvailable={book.readingOutlineAvailable} /> : <>
       {error && <div className="form-alert" role="alert">{error}<button type="button" onClick={tryAgain}>Tentar novamente</button></div>}
       {!events && !error && <div className="timeline-list" role="status"><span className="sr-only">Carregando timeline…</span><div className="timeline-item skeleton" /><div className="timeline-item skeleton" /></div>}
       {events?.length === 0 && <div className="empty-state compact lore-empty"><div className="empty-symbol" aria-hidden="true">⌁</div><h2>{hasProgress ? "Nenhum evento conhecido." : "A timeline começa com a leitura."}</h2><p>{hasProgress ? "Ainda não há acontecimentos registrados dentro do trecho que você leu." : "Marque onde você parou para ver apenas os acontecimentos já revelados."}</p><Link href={`/app/books/${bookId}`} className="button button-outline">{hasProgress ? "Voltar ao livro" : "Marcar meu progresso"} <span aria-hidden="true">↗</span></Link></div>}

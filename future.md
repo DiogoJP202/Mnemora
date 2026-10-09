@@ -1,6 +1,6 @@
 # Evoluções futuras do Mnemora
 
-Este documento registra possibilidades posteriores ao MVP. Nenhum item abaixo está implementado ou prometido na versão atual. Qualquer evolução de leitura deve preservar a regra central: selecionar o conhecimento autorizado no backend antes de buscar, ranquear, resumir ou gerar uma resposta.
+Este documento registra possibilidades posteriores ao MVP. Os itens das listas são evoluções ainda não implementadas ou prometidas; os parágrafos distinguem recursos já existentes. Qualquer evolução de leitura deve preservar a regra central: selecionar o conhecimento autorizado no backend antes de buscar, ranquear, resumir ou gerar uma resposta.
 
 ## Recuperação de senha e conta
 
@@ -44,12 +44,15 @@ O algoritmo de agendamento não pode conceder visibilidade. Ele seleciona soment
 
 ## Packs de lore e trabalho editorial
 
-- importar e exportar packs em um formato versionado e validável;
-- oferecer rascunho, revisão, publicação e histórico de alterações;
-- comparar previews em diferentes pontos de leitura antes de publicar;
-- validar automaticamente relações, aliases e fatos que antecedam suas entidades;
+- versionar o formato de pack e oferecer importação/exportação validada;
+- acrescentar etapas formais de revisão, aprovação por outra pessoa e rollback;
+- manter histórico e diff de cada publicação de índice e lore;
+- comparar em uma única tela vários pontos de leitura e versões do conteúdo;
 - mapear edições diferentes do mesmo livro para uma sequência canônica de unidades;
+- ampliar fontes de índices somente quando sua licença e procedência permitirem o uso;
 - criar ferramentas de colaboração e moderação para packs comunitários.
+
+O produto atual já separa índice e lore em `None`, `Draft` e `Published`, permite preview seguro, registra solicitações dos leitores e pode iniciar o rascunho do índice pelo sumário opcional de uma edição da Open Library. Esse sumário não substitui revisão editorial e nunca cria personagens, fatos, relações ou pontos de revelação.
 
 Conteúdo público ou comunitário precisará de autoria, licença, atribuição, denúncia e trilha de auditoria.
 

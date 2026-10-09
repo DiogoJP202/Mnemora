@@ -21,7 +21,7 @@ public static class MemoryEndpoints
             Guid bookId, Guid? entityId, ClaimsPrincipal user,
             MnemoraDbContext db, KnowledgeReader reader) =>
         {
-            var scope = await reader.ScopeAsync(CurrentUser.Id(user), bookId);
+            var scope = await reader.LibraryScopeAsync(CurrentUser.Id(user), bookId);
             if (scope is null) return Results.NotFound();
             if (entityId is Guid requestedEntity
                 && !await reader.KnownEntities(scope).AnyAsync(x => x.Id == requestedEntity))
@@ -37,7 +37,7 @@ public static class MemoryEndpoints
             Guid bookId, NoteCreate request, ClaimsPrincipal user,
             MnemoraDbContext db, KnowledgeReader reader) =>
         {
-            var scope = await reader.ScopeAsync(CurrentUser.Id(user), bookId);
+            var scope = await reader.LibraryScopeAsync(CurrentUser.Id(user), bookId);
             if (scope is null) return Results.NotFound();
             var content = CleanContent(request.Content);
             if (content is null) return InvalidContent();
@@ -79,7 +79,7 @@ public static class MemoryEndpoints
             var owned = await db.UserNotes.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.Id == noteId && x.UserId == userId);
             if (owned is null) return Results.NotFound();
-            var scope = await reader.ScopeAsync(userId, owned.BookId);
+            var scope = await reader.LibraryScopeAsync(userId, owned.BookId);
             if (scope is null) return Results.NotFound();
             var note = await VisibleNotes(db, reader, scope).AsTracking()
                 .FirstOrDefaultAsync(x => x.Id == noteId);
@@ -100,7 +100,7 @@ public static class MemoryEndpoints
             var owned = await db.UserNotes.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.Id == noteId && x.UserId == userId);
             if (owned is null) return Results.NotFound();
-            var scope = await reader.ScopeAsync(userId, owned.BookId);
+            var scope = await reader.LibraryScopeAsync(userId, owned.BookId);
             if (scope is null) return Results.NotFound();
             var note = await VisibleNotes(db, reader, scope).AsTracking()
                 .FirstOrDefaultAsync(x => x.Id == noteId);

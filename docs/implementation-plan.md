@@ -6,7 +6,7 @@ Mnemora é um companion de leitura mobile-first. A consulta deve recuperar apena
 
 Monorepo com `apps/web` (Next.js App Router, React, TypeScript, Tailwind) e `src/Mnemora.Api`, `src/Mnemora.Application`, `src/Mnemora.Domain`, `src/Mnemora.Infrastructure` (ASP.NET Core, EF Core, Identity, SQLite). A API REST vive em `/api`. O Next.js encaminha `/api/*` ao backend para manter a origem do navegador única. Toda resposta privada recebe `Cache-Control: no-store`. Cookies de autenticação são HttpOnly, SameSite Lax e Secure em produção; operações de escrita requerem antiforgery.
 
-O banco `mnemora.db` usa migrations EF e permanece fora do Git. As tabelas principais são Book, ReadingUnit, UserBook, LoreEntity, EntityAlias, LoreFact, LoreRelation, UserNote e UserRecallActivity. ReadingUnit tem hierarquia e ordem absoluta por livro; o progresso usa a unidade, nunca a página. Alias, fato e relação têm unidade de revelação. Eventos podem ter ordem cronológica distinta da ordem de leitura.
+O banco `mnemora.db` usa migrations EF e permanece fora do Git. As tabelas principais são Book, ReadingUnit, UserBook, LoreEntity, EntityAlias, LoreFact, LoreRelation, UserNote, UserRecallActivity e MemoryPackRequest. ReadingUnit tem hierarquia e ordem absoluta por livro; o progresso usa a unidade, nunca a página. Alias, fato e relação têm unidade de revelação. Eventos podem ter ordem cronológica distinta da ordem de leitura. Book mantém publicação independente do índice e do lore; MemoryPackRequest registra um pedido pendente por usuário/livro compartilhado.
 
 O backend obtém o progresso autenticado e aplica uma política central para selecionar entidades, aliases, fatos e relações conhecidos antes de montar DTOs. Sem unidade registrada, nenhum lore é conhecido. Retroceder o progresso revoga visibilidade. Busca textual considera somente campos já visíveis, inclusive pistas de memória. A timeline lista apenas eventos conhecidos. O leitor vê rótulos neutros para unidades futuras cujo título possa revelar a história.
 
@@ -37,11 +37,23 @@ Cada fase termina com validações pertinentes, inspeção do diff e de segredos
 | 13 | Open Library, cadastro manual privado e livros sem pack | Providers, isolamento e jornada de adição |
 | 14 | Metadados bibliográficos por edição e confirmação da importação | Contratos, deduplicação, cache e jornada por ISBN |
 | 15 | Gestão completa da estante: status em todos os livros, atualização atômica, limpeza do ponto, metadados persistidos e remoção segura | Atomicidade e isolamento, build/lint e jornada desktop/360 px |
+| 16 | Workflow editorial de memory packs, índice independente, solicitações do leitor e importação opcional de sumário da Open Library | Estados de publicação, ausência de vazamento por rascunho, idempotência, autorização, migration de upgrade, builds e jornada desktop/360 px |
+
+### Aceite da fase 16
+
+- O leitor registra um pedido idempotente para livro compartilhado da sua biblioteca, e o Admin acompanha a demanda na fila editorial.
+- O índice pode ser publicado antes do lore e já permitir progresso; unidades em rascunho não chegam ao leitor.
+- O pack completo exige índice publicado e lore publicado com entidades, mantendo as fronteiras antisspoiler existentes.
+- A retirada de publicação revoga a disponibilidade na próxima consulta; retirar o índice também recolhe o lore.
+- Um sumário disponível em uma edição exata da Open Library pode ser revisado e importado com hierarquia, rótulos neutros e procedência. Sem sumário, o fluxo permite autoria manual.
+- Notas gerais funcionam em livros sem pack, enquanto vínculos a unidades ou entidades respeitam publicação e progresso.
+- O upgrade preserva conteúdo publicado anterior e mantém novas importações sem conteúdo editorial; as rotas administrativas filhas não dão acesso a livros privados.
 
 ## Riscos e decisões
 
 - O conteúdo demonstrativo será um universo fictício com textos originais e curtos. Metadados externos fornecem título, autor e capa, mas nenhuma descrição externa entra automaticamente no lore.
-- Livros importados sem pack de lore permanecem na biblioteca com estado vazio apropriado.
+- Livros importados sem pack de lore permanecem na biblioteca com estado apropriado e podem receber um índice publicado antes do conhecimento.
+- Sumários externos são apenas uma ajuda para criar unidades: a disponibilidade varia por edição, e personagens, facções, relações, eventos e pontos de revelação continuam sob curadoria humana.
 - Recuperação de senha, IA, busca semântica e repetição espaçada ficam para versões futuras. A revisão MVP registra feedback sem algoritmo de agendamento.
 - Um Admin de desenvolvimento é criado apenas por seed explícito com credenciais fornecidas em variáveis de ambiente; nenhum segredo é versionado.
 - O `origin` configurado é o repositório do projeto. O trabalho prossegue na branch `main`, vazia no início.

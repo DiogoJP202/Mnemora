@@ -17,6 +17,7 @@ public sealed class MnemoraDbContext(DbContextOptions<MnemoraDbContext> options)
     public DbSet<LoreRelation> LoreRelations => Set<LoreRelation>();
     public DbSet<UserNote> UserNotes => Set<UserNote>();
     public DbSet<UserRecallActivity> UserRecallActivities => Set<UserRecallActivity>();
+    public DbSet<MemoryPackRequest> MemoryPackRequests => Set<MemoryPackRequest>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -28,8 +29,16 @@ public sealed class MnemoraDbContext(DbContextOptions<MnemoraDbContext> options)
             entity.Property(x => x.Author).HasMaxLength(300);
             entity.Property(x => x.CatalogKind).HasConversion<string>().HasMaxLength(30)
                 .HasDefaultValue(BookCatalogKind.Curated);
+            entity.Property(x => x.ReadingOutlineStatus).HasConversion<string>()
+                .HasMaxLength(30).HasDefaultValue(EditorialContentStatus.Published)
+                .HasSentinel((EditorialContentStatus)(-1));
+            entity.Property(x => x.LoreStatus).HasConversion<string>()
+                .HasMaxLength(30).HasDefaultValue(EditorialContentStatus.Published)
+                .HasSentinel((EditorialContentStatus)(-1));
             entity.Property(x => x.ExternalProvider).HasMaxLength(80);
             entity.Property(x => x.ExternalId).HasMaxLength(200);
+            entity.Property(x => x.ReadingOutlineSourceUrl).HasMaxLength(2_000);
+            entity.Property(x => x.ReadingOutlineAttribution).HasMaxLength(300);
             entity.HasIndex(x => new { x.ExternalProvider, x.ExternalId }).IsUnique();
             entity.HasIndex(x => new { x.CatalogKind, x.OwnerUserId });
             entity.HasIndex(x => new { x.OwnerUserId, x.Isbn10 }).IsUnique()
@@ -119,6 +128,15 @@ public sealed class MnemoraDbContext(DbContextOptions<MnemoraDbContext> options)
             entity.HasOne<IdentityUser<Guid>>().WithMany().HasForeignKey(x => x.UserId);
             entity.HasOne<Book>().WithMany().HasForeignKey(x => x.BookId);
             entity.HasOne<LoreEntity>().WithMany().HasForeignKey(x => x.EntityId);
+        });
+        builder.Entity<MemoryPackRequest>(entity =>
+        {
+            entity.HasIndex(x => new { x.UserId, x.BookId }).IsUnique();
+            entity.HasIndex(x => new { x.BookId, x.CreatedAt });
+            entity.HasOne<IdentityUser<Guid>>().WithMany().HasForeignKey(x => x.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<Book>().WithMany().HasForeignKey(x => x.BookId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

@@ -365,6 +365,118 @@ public sealed class BookMetadataProviderTests
     }
 
     [Fact]
+    public async Task Open_Library_outline_maps_only_the_exact_edition_table_of_contents()
+    {
+        var handler = new StubHttpHandler(request =>
+        {
+            Assert.Equal("/books/OL28645793M.json", request.RequestUri?.AbsolutePath);
+            return Json("""
+                {
+                  "table_of_contents": [
+                    { "title": "Parte um", "level": 1, "pagenum": "7" },
+                    { "title": "  O começo   da viagem  ", "level": "2", "page": 12 },
+                    "Interlúdio",
+                    { "title": "", "level": 1 },
+                    { "title": "Apêndice", "level": 99 }
+                  ]
+                }
+                """);
+        });
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://openlibrary.org/")
+        };
+
+        var outline = await new OpenLibraryReadingOutlineProvider(client).GetAsync(
+            BookMetadataProviders.OpenLibrary, "/books/ol28645793m",
+            CancellationToken.None);
+
+        Assert.NotNull(outline);
+        Assert.Equal("OL28645793M", outline.ExternalId);
+        Assert.Equal("https://openlibrary.org/books/OL28645793M", outline.SourceUrl);
+        Assert.Collection(outline.Items,
+            item =>
+            {
+                Assert.Equal("Parte um", item.Title);
+                Assert.Equal(1, item.Level);
+                Assert.Equal(7, item.Page);
+            },
+            item =>
+            {
+                Assert.Equal("O começo da viagem", item.Title);
+                Assert.Equal(2, item.Level);
+                Assert.Equal(12, item.Page);
+            },
+            item => Assert.Equal("Interlúdio", item.Title),
+            item => Assert.Equal(4, item.Level));
+        Assert.Equal(1, handler.RequestCount);
+    }
+
+    [Fact]
+    public async Task Open_Library_outline_returns_null_when_toc_is_absent()
+    {
+        var handler = new StubHttpHandler(_ => Json("{\"title\":\"Livro\"}"));
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://openlibrary.org/")
+        };
+
+        Assert.Null(await new OpenLibraryReadingOutlineProvider(client).GetAsync(
+            BookMetadataProviders.OpenLibrary, "OL28645793M", CancellationToken.None));
+        Assert.Equal(1, handler.RequestCount);
+    }
+
+    [Theory]
+    [InlineData(200)]
+    [InlineData(201)]
+    public async Task Open_Library_outline_never_returns_a_silently_truncated_index(int itemCount)
+    {
+        var payload = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            table_of_contents = Enumerable.Range(1, itemCount)
+                .Select(index => new { title = $"Capítulo {index}", level = 1 })
+        });
+        var handler = new StubHttpHandler(_ => Json(payload));
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://openlibrary.org/")
+        };
+        var provider = new OpenLibraryReadingOutlineProvider(client);
+
+        if (itemCount > 200)
+        {
+            await Assert.ThrowsAsync<ReadingOutlineLimitExceededException>(() =>
+                provider.GetAsync(BookMetadataProviders.OpenLibrary,
+                    "OL28645793M", CancellationToken.None));
+        }
+        else
+        {
+            var outline = await provider.GetAsync(BookMetadataProviders.OpenLibrary,
+                "OL28645793M", CancellationToken.None);
+            Assert.NotNull(outline);
+            Assert.Equal(itemCount, outline.Items.Count);
+        }
+    }
+
+    [Fact]
+    public async Task Open_Library_outline_rejects_work_or_invalid_ids_without_a_request()
+    {
+        var handler = new StubHttpHandler(_ =>
+            throw new InvalidOperationException("HTTP should not be called."));
+        using var client = new HttpClient(handler)
+        {
+            BaseAddress = new Uri("https://openlibrary.org/")
+        };
+        var provider = new OpenLibraryReadingOutlineProvider(client);
+
+        Assert.Null(await provider.GetAsync(
+            BookMetadataProviders.OpenLibrary, "OL18016709W", CancellationToken.None));
+        Assert.Null(await provider.GetAsync(
+            BookMetadataProviders.GoogleBooks, "OL28645793M", CancellationToken.None));
+        Assert.Equal(0, handler.RequestCount);
+    }
+
+    [Fact]
     public async Task Composite_keeps_Open_Library_when_Google_Books_fails()
     {
         var google = new FakeSource(BookMetadataProviders.GoogleBooks,

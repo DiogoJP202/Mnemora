@@ -2,6 +2,8 @@ namespace Mnemora.Domain;
 
 public enum BookCatalogKind { Curated, Imported, Private }
 
+public enum EditorialContentStatus { None, Draft, Published }
+
 public sealed class Book
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -19,8 +21,24 @@ public sealed class Book
     public string? ExternalId { get; set; }
     public BookCatalogKind CatalogKind { get; set; } = BookCatalogKind.Curated;
     public Guid? OwnerUserId { get; set; }
+    public EditorialContentStatus ReadingOutlineStatus { get; set; } =
+        EditorialContentStatus.Published;
+    public EditorialContentStatus LoreStatus { get; set; } =
+        EditorialContentStatus.Published;
+    public DateTime? ReadingOutlinePublishedAt { get; set; }
+    public DateTime? LorePublishedAt { get; set; }
+    public string? ReadingOutlineSourceUrl { get; set; }
+    public string? ReadingOutlineAttribution { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public sealed class MemoryPackRequest
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid UserId { get; set; }
+    public Guid BookId { get; set; }
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }
 
 public enum ReadingUnitType { Part, Chapter, Section, Subsection }

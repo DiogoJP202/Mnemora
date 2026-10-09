@@ -1,6 +1,16 @@
 export type AdminBook = {
   id: string; title: string; author: string;
   description: string | null; coverUrl: string | null;
+  catalogKind: "Curated" | "Imported";
+  externalProvider: string | null; externalId: string | null;
+  isbn10: string | null; isbn13: string | null;
+  publisher: string | null; publishedDate: string | null; language: string | null;
+  readingOutlineSourceUrl: string | null; readingOutlineAttribution: string | null;
+  readingOutlineStatus: "None" | "Draft" | "Published";
+  loreStatus: "None" | "Draft" | "Published";
+  readingOutlinePublishedAt: string | null; lorePublishedAt: string | null;
+  requestCount: number; unitCount: number; entityCount: number;
+  factCount: number; relationCount: number; eventCount: number;
 };
 export type AdminUnit = {
   id: string; bookId: string; parentUnitId: string | null;

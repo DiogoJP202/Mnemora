@@ -252,6 +252,16 @@ namespace Mnemora.Infrastructure.Persistence.Migrations
                     b.Property<string>("Language")
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("LorePublishedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LoreStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Published");
+
                     b.Property<Guid?>("OwnerUserId")
                         .HasColumnType("TEXT");
 
@@ -260,6 +270,24 @@ namespace Mnemora.Infrastructure.Persistence.Migrations
 
                     b.Property<string>("Publisher")
                         .HasColumnType("TEXT");
+
+                    b.Property<string>("ReadingOutlineAttribution")
+                        .HasMaxLength(300)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReadingOutlinePublishedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReadingOutlineSourceUrl")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReadingOutlineStatus")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(30)
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("Published");
 
                     b.Property<string>("Subtitle")
                         .HasColumnType("TEXT");
@@ -459,6 +487,31 @@ namespace Mnemora.Infrastructure.Persistence.Migrations
                     b.HasIndex("BookId", "TargetEntityId");
 
                     b.ToTable("LoreRelations");
+                });
+
+            modelBuilder.Entity("Mnemora.Domain.MemoryPackRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("BookId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BookId", "CreatedAt");
+
+                    b.HasIndex("UserId", "BookId")
+                        .IsUnique();
+
+                    b.ToTable("MemoryPackRequests");
                 });
 
             modelBuilder.Entity("Mnemora.Domain.ReadingUnit", b =>
@@ -769,6 +822,21 @@ namespace Mnemora.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("TargetEntityId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("Mnemora.Domain.MemoryPackRequest", b =>
+                {
+                    b.HasOne("Mnemora.Domain.Book", null)
+                        .WithMany()
+                        .HasForeignKey("BookId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Microsoft.AspNetCore.Identity.IdentityUser<System.Guid>", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });
 

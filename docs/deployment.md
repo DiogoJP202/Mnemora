@@ -19,7 +19,7 @@ O filesystem do serviço não é persistente. O banco SQLite, as contas cadastra
 
 O Blueprint também não solicita `ADMIN_EMAIL` nem `ADMIN_PASSWORD`. A demonstração pública permite cadastrar leitores e testar a experiência de leitura, mas não fornece acesso inicial à área `/admin`.
 
-A Open Library funciona como catálogo externo padrão sem chave. Assim, o leitor pode buscar por título, autor ou ISBN e importar metadados mesmo na demonstração. Se o livro não for encontrado, ele pode cadastrar título, autor opcional e ISBN opcional; esse registro manual fica privado à conta. Livros sem memory pack ainda permitem status, página e notas, mas não oferecem lore.
+A Open Library funciona como catálogo externo padrão sem chave. Assim, o leitor pode buscar por título, autor ou ISBN e importar metadados mesmo na demonstração. Se o livro não for encontrado, ele pode cadastrar título, autor opcional e ISBN opcional; esse registro manual fica privado à conta. Livros sem memory pack ainda permitem status, página e notas, e livros compartilhados aceitam uma solicitação editorial. Quando uma edição exata da Open Library oferece `table_of_contents`, um Admin pode usá-lo como rascunho do índice; lore continua dependendo de curadoria e publicação humanas.
 
 ## Criar a demonstração pelo Blueprint
 
@@ -40,7 +40,7 @@ Depois que o serviço ficar disponível:
 
 1. abra `/api/health` e confirme a resposta `{"status":"ok"}`;
 2. abra a landing page e verifique o manifesto da PWA;
-3. cadastre um leitor, busque um livro na Open Library, importe-o e confirme que ele aparece na biblioteca;
+3. cadastre um leitor, busque um livro na Open Library, importe-o, confirme que ele aparece na biblioteca e registre uma solicitação de memory pack;
 4. cadastre manualmente outro livro e confirme que status, página e notas funcionam sem um memory pack;
 5. percorra o pack demonstrativo, avance e retroceda o progresso e confirme que o lore posterior volta a ficar oculto;
 6. aguarde ou reinicie o serviço apenas se quiser confirmar que a demo recupera o pack e descarta os dados efêmeros.

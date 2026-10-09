@@ -6,7 +6,8 @@ public static class KnowledgeVisibility
         currentOrder is int progress && revealOrder <= progress;
 }
 
-public sealed record KnowledgeScope(Guid UserId, Guid BookId, int? CurrentOrder);
+public sealed record KnowledgeScope(
+    Guid UserId, Guid BookId, int? CurrentOrder, bool LoreAvailable = true);
 
 public sealed record LoreFactDto(Guid Id, string Content, string? MemoryHint, string Type);
 public sealed record LoreRelationDto(

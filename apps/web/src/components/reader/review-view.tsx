@@ -87,7 +87,7 @@ export function ReviewView({ bookId }: { bookId: string }) {
       </div>
       <BookLoreNav bookId={bookId} active="/review" memoryPackAvailable={book?.memoryPackAvailable ?? false} />
       <div className="sr-only" aria-live="polite">{announcement}</div>
-      {book && !book.memoryPackAvailable ? <MemoryPackUnavailable bookId={bookId} /> : <>
+      {book && !book.memoryPackAvailable ? <MemoryPackUnavailable bookId={bookId} initialStatus={book.memoryPackStatus} canRequest={book.canRequestMemoryPack} outlineAvailable={book.readingOutlineAvailable} /> : <>
       {error && <div className="form-alert" role="alert">{error}<button type="button" onClick={() => void retryLoad()}>Tentar novamente</button></div>}
       {cards === null && !error && <div className="review-card skeleton" role="status"><span className="sr-only">Preparando revisão…</span></div>}
       {cards?.length === 0 && (

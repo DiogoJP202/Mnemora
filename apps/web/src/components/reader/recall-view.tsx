@@ -92,7 +92,7 @@ export function RecallView({ bookId }: { bookId: string }) {
           )}
         </div>
       )}
-      {book && !book.memoryPackAvailable ? <MemoryPackUnavailable bookId={bookId} /> : book ? <>
+      {book && !book.memoryPackAvailable ? <MemoryPackUnavailable bookId={bookId} initialStatus={book.memoryPackStatus} canRequest={book.canRequestMemoryPack} outlineAvailable={book.readingOutlineAvailable} /> : book ? <>
       <form className="recall-search" role="search" onSubmit={search}>
         <label htmlFor="recall-query">O que você quer relembrar?</label>
         <div>

@@ -105,6 +105,9 @@ export function BookSearch() {
             categories: [],
             edition: null,
             memoryPackAvailable: book.memoryPackAvailable,
+            readingOutlineAvailable: book.readingOutlineAvailable,
+            memoryPackStatus: book.memoryPackStatus,
+            canRequestMemoryPack: book.canRequestMemoryPack,
           })));
         } else {
           setError(catalogResult.reason instanceof Error
@@ -269,6 +272,13 @@ export function BookSearch() {
             const isbn = preferredIsbn(book);
             const publisherAndYear = [book.publisher, year].filter(Boolean).join(" • ");
             const details = metadataRows(book);
+            const memoryLabel = book.memoryPackAvailable
+              ? "MEMÓRIA DISPONÍVEL"
+              : book.memoryPackStatus === "Preparing"
+                ? book.readingOutlineAvailable ? "ÍNDICE DISPONÍVEL" : "EM PREPARAÇÃO"
+                : book.memoryPackStatus === "Requested"
+                  ? "PACOTE SOLICITADO"
+                  : "SOMENTE ESTANTE";
 
             return (
               <article className={`catalog-item${isReviewing ? " catalog-item-reviewing" : ""}`} key={renderKey}>
@@ -279,7 +289,7 @@ export function BookSearch() {
                       {book.source === "external" ? "CATÁLOGO EXTERNO" : "CATÁLOGO MNEMORA"}
                     </span>
                     <span className={`pack-label${book.memoryPackAvailable ? " pack-label-ready" : ""}`}>
-                      {book.memoryPackAvailable ? "MEMÓRIA DISPONÍVEL" : "SOMENTE ESTANTE"}
+                      {memoryLabel}
                     </span>
                   </div>
                   <h2>{book.title}</h2>

@@ -36,6 +36,15 @@ builder.Services.AddHttpClient<OpenLibraryProvider>(client =>
         contact = "https://github.com/DiogoJP202/Mnemora";
     client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mnemora/1.0 ({contact})");
 });
+builder.Services.AddHttpClient<IReadingOutlineProvider, OpenLibraryReadingOutlineProvider>(client =>
+{
+    client.BaseAddress = new Uri("https://openlibrary.org/");
+    client.Timeout = TimeSpan.FromSeconds(8);
+    var contact = builder.Configuration["OPEN_LIBRARY_CONTACT"]?.Trim();
+    if (string.IsNullOrWhiteSpace(contact))
+        contact = "https://github.com/DiogoJP202/Mnemora";
+    client.DefaultRequestHeaders.UserAgent.ParseAdd($"Mnemora/1.0 ({contact})");
+});
 builder.Services.AddTransient<IBookMetadataSource>(services =>
     services.GetRequiredService<GoogleBooksProvider>());
 builder.Services.AddTransient<IBookMetadataSource>(services =>

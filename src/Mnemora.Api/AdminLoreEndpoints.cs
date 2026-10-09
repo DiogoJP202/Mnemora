@@ -11,15 +11,25 @@ public static class AdminLoreEndpoints
     {
         var admin = app.MapGroup("/api/admin").RequireAuthorization("Admin").WithTags("Admin Lore");
 
-        admin.MapGet("/books/{bookId:guid}/entities", async (Guid bookId, MnemoraDbContext db) =>
-            Results.Ok(await db.LoreEntities.AsNoTracking().Where(x => x.BookId == bookId)
+        admin.MapGet("/books/{bookId:guid}/entities", async (
+            Guid bookId, MnemoraDbContext db) =>
+        {
+            if (await AdminBookEndpoints.AdminBookAsync(
+                    db, bookId, asTracking: false) is null)
+                return Results.NotFound();
+            return Results.Ok(await db.LoreEntities.AsNoTracking()
+                .Where(x => x.BookId == bookId)
                 .OrderBy(x => x.Name).Select(x => new EntityDto(x.Id, x.BookId,
                     x.Type.ToString(), x.Name, x.Slug, x.ShortDescription, x.ImageUrl,
-                    x.FirstKnownAtUnitId, x.Importance, x.ChronologyIndex)).ToListAsync()));
+                    x.FirstKnownAtUnitId, x.Importance, x.ChronologyIndex)).ToListAsync());
+        });
 
         admin.MapGet("/entities/{entityId:guid}", async (Guid entityId, MnemoraDbContext db) =>
         {
-            var entity = await db.LoreEntities.AsNoTracking().FirstOrDefaultAsync(x => x.Id == entityId);
+            var entity = await (from lore in db.LoreEntities.AsNoTracking()
+                join book in db.Books.AsNoTracking() on lore.BookId equals book.Id
+                where lore.Id == entityId && book.CatalogKind != BookCatalogKind.Private
+                select lore).FirstOrDefaultAsync();
             if (entity is null) return Results.NotFound();
             var aliases = await db.EntityAliases.AsNoTracking().Where(x => x.EntityId == entityId)
                 .Select(x => new AliasDto(x.Id, x.Alias, x.RevealAtUnitId)).ToListAsync();
@@ -39,6 +49,8 @@ public static class AdminLoreEndpoints
         admin.MapPost("/books/{bookId:guid}/entities", async (
             Guid bookId, EntityWrite request, MnemoraDbContext db) =>
         {
+            if (await AdminBookEndpoints.EditableLoreBookAsync(db, bookId) is null)
+                return await AdminBookEndpoints.LoreDraftOrNotFoundAsync(db, bookId);
             var error = await ValidateEntityAsync(db, bookId, null, request);
             if (error is not null) return error;
             var entity = ToEntity(bookId, request);
@@ -55,6 +67,10 @@ public static class AdminLoreEndpoints
         {
             var entity = await db.LoreEntities.FindAsync(entityId);
             if (entity is null) return Results.NotFound();
+            if (await AdminBookEndpoints.EditableLoreBookAsync(
+                    db, entity.BookId) is null)
+                return await AdminBookEndpoints.LoreDraftOrNotFoundAsync(
+                    db, entity.BookId);
             var error = await ValidateEntityAsync(db, entity.BookId, entityId, request);
             if (error is not null) return error;
             var consistencyError = await consistency.CheckEntityFirstKnownAsync(
@@ -79,6 +95,10 @@ public static class AdminLoreEndpoints
         {
             var entity = await db.LoreEntities.FindAsync(entityId);
             if (entity is null) return Results.NotFound();
+            if (await AdminBookEndpoints.EditableLoreBookAsync(
+                    db, entity.BookId) is null)
+                return await AdminBookEndpoints.LoreDraftOrNotFoundAsync(
+                    db, entity.BookId);
             if (await db.LoreRelations.AnyAsync(x =>
                     x.SourceEntityId == entityId || x.TargetEntityId == entityId)
                 || await db.UserNotes.AnyAsync(x => x.EntityId == entityId)
@@ -94,6 +114,10 @@ public static class AdminLoreEndpoints
         {
             var entity = await db.LoreEntities.FindAsync(entityId);
             if (entity is null) return Results.NotFound();
+            if (await AdminBookEndpoints.EditableLoreBookAsync(
+                    db, entity.BookId) is null)
+                return await AdminBookEndpoints.LoreDraftOrNotFoundAsync(
+                    db, entity.BookId);
             if (string.IsNullOrWhiteSpace(request.Alias)) return Results.BadRequest("Informe o alias.");
             var reveal = await RevealUnitAsync(db, entity, request.RevealAtUnitId);
             if (reveal is null) return Results.BadRequest("Ponto de revelação inválido.");
@@ -117,6 +141,11 @@ public static class AdminLoreEndpoints
             var alias = await db.EntityAliases.FindAsync(aliasId);
             if (alias is null) return Results.NotFound();
             var entity = await db.LoreEntities.FindAsync(alias.EntityId);
+            if (entity is null || await AdminBookEndpoints.EditableLoreBookAsync(
+                    db, entity.BookId) is null)
+                return entity is null ? Results.NotFound()
+                    : await AdminBookEndpoints.LoreDraftOrNotFoundAsync(
+                        db, entity.BookId);
             if (string.IsNullOrWhiteSpace(request.Alias)) return Results.BadRequest("Informe o alias.");
             var reveal = await RevealUnitAsync(db, entity!, request.RevealAtUnitId);
             if (reveal is null) return Results.BadRequest("Ponto de revelação inválido.");
@@ -134,6 +163,12 @@ public static class AdminLoreEndpoints
         {
             var alias = await db.EntityAliases.FindAsync(aliasId);
             if (alias is null) return Results.NotFound();
+            var aliasEntity = await db.LoreEntities.FindAsync(alias.EntityId);
+            if (aliasEntity is null || await AdminBookEndpoints.EditableLoreBookAsync(
+                    db, aliasEntity.BookId) is null)
+                return aliasEntity is null ? Results.NotFound()
+                    : await AdminBookEndpoints.LoreDraftOrNotFoundAsync(
+                        db, aliasEntity.BookId);
             db.EntityAliases.Remove(alias);
             await db.SaveChangesAsync();
             return Results.NoContent();
@@ -144,6 +179,10 @@ public static class AdminLoreEndpoints
         {
             var entity = await db.LoreEntities.FindAsync(entityId);
             if (entity is null) return Results.NotFound();
+            if (await AdminBookEndpoints.EditableLoreBookAsync(
+                    db, entity.BookId) is null)
+                return await AdminBookEndpoints.LoreDraftOrNotFoundAsync(
+                    db, entity.BookId);
             var error = await ValidateFactAsync(db, entity, request);
             if (error is not null) return error;
             var fact = ToFact(entityId, request);
@@ -158,6 +197,11 @@ public static class AdminLoreEndpoints
             var fact = await db.LoreFacts.FindAsync(factId);
             if (fact is null) return Results.NotFound();
             var entity = await db.LoreEntities.FindAsync(fact.EntityId);
+            if (entity is null || await AdminBookEndpoints.EditableLoreBookAsync(
+                    db, entity.BookId) is null)
+                return entity is null ? Results.NotFound()
+                    : await AdminBookEndpoints.LoreDraftOrNotFoundAsync(
+                        db, entity.BookId);
             var error = await ValidateFactAsync(db, entity!, request);
             if (error is not null) return error;
             fact.Content = request.Content.Trim();
@@ -173,6 +217,12 @@ public static class AdminLoreEndpoints
         {
             var fact = await db.LoreFacts.FindAsync(factId);
             if (fact is null) return Results.NotFound();
+            var factEntity = await db.LoreEntities.FindAsync(fact.EntityId);
+            if (factEntity is null || await AdminBookEndpoints.EditableLoreBookAsync(
+                    db, factEntity.BookId) is null)
+                return factEntity is null ? Results.NotFound()
+                    : await AdminBookEndpoints.LoreDraftOrNotFoundAsync(
+                        db, factEntity.BookId);
             db.LoreFacts.Remove(fact);
             await db.SaveChangesAsync();
             return Results.NoContent();
@@ -181,6 +231,9 @@ public static class AdminLoreEndpoints
         admin.MapGet("/books/{bookId:guid}/preview", async (
             Guid bookId, Guid atUnitId, MnemoraDbContext db, KnowledgeReader reader) =>
         {
+            if (await AdminBookEndpoints.AdminBookAsync(
+                    db, bookId, asTracking: false) is null)
+                return Results.NotFound();
             var unit = await db.ReadingUnits.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.Id == atUnitId && x.BookId == bookId);
             if (unit is null) return Results.BadRequest("Unidade inválida.");
@@ -195,8 +248,10 @@ public static class AdminLoreEndpoints
         admin.MapGet("/entities/{entityId:guid}/preview", async (
             Guid entityId, Guid atUnitId, MnemoraDbContext db, KnowledgeReader reader) =>
         {
-            var entity = await db.LoreEntities.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == entityId);
+            var entity = await (from lore in db.LoreEntities.AsNoTracking()
+                join book in db.Books.AsNoTracking() on lore.BookId equals book.Id
+                where lore.Id == entityId && book.CatalogKind != BookCatalogKind.Private
+                select lore).FirstOrDefaultAsync();
             if (entity is null) return Results.NotFound();
             var unit = await db.ReadingUnits.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.Id == atUnitId && x.BookId == entity.BookId);
