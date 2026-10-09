@@ -4,7 +4,7 @@
 
 O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, busca externa, cadastro manual de livros, gestão completa da estante, solicitação de memory packs, progresso por índice publicado, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo com workflow editorial. A regra antisspoiler permanece no backend e impede que rascunhos ou dados futuros sejam enviados ao frontend.
 
-Este relatório foi atualizado em 9 de outubro de 2026. A fase 16 está implementada e validada localmente, incluindo a jornada em navegador. O commit, o push, o CI e o deploy ainda estão pendentes de confirmação nesta revisão.
+Este relatório foi atualizado em 9 de outubro de 2026. A fase 16 está implementada e validada localmente, incluindo a jornada em navegador, e foi publicada em `origin/main` no commit `999b0c8`. O CI foi aprovado e a atualização no Render foi confirmada pela API pública e pelo navegador.
 
 ## Histórico por fase
 
@@ -27,7 +27,7 @@ Este relatório foi atualizado em 9 de outubro de 2026. A fase 16 está implemen
 | 14 — Metadados por edição | `24aaaac` | Metadados bibliográficos ricos, ISBN canônico, deduplicação entre providers, confirmação da edição e cache externo de quatro horas |
 | Manutenção pós-fase 14 | `8fed8fa` | Atualização do Next.js para o patch de segurança 16.3.8 |
 | 15 — Gestão da estante | `b58552c` | Status e progresso atômicos, limpeza do ponto, metadados da edição na estante/detalhe e remoção isolada com confirmação |
-| 16 — Memory packs editoriais | Implementação local; commit pendente | Índice e lore com publicação independente, solicitações do leitor, fila administrativa e importação opcional de sumário da Open Library |
+| 16 — Memory packs editoriais | `999b0c8` | Índice e lore com publicação independente, solicitações do leitor, fila administrativa e importação opcional de sumário da Open Library |
 
 ## Funcionalidades entregues
 
@@ -164,8 +164,9 @@ Os testes rejeitam exclusão sem antiforgery, removem somente as memórias do le
 | Auditoria npm completa | Aviso `high` de desenvolvimento conhecido, sem patch compatível | `GHSA-vfj7-8cjw-p6xm` em `braces` 3.0.3 pela cadeia ESLint; exceção limitada às cinco versões e à classificação `dev-only`, com expiração no início de 9 de novembro de 2026 (UTC) |
 | Jornada em navegador local com Playwright | Aprovada em desktop de 1280 px e mobile de 360 px, em light e dark | Cadastro, busca real, confirmação/importação, solicitação persistida, notas sem pack, fila Admin, preparação, lote de unidades e publicação do índice antes do lore |
 | Rotas de exploração e preservação de progresso | Aprovadas, sem erros de página, overlay ou overflow | `characters`, `factions`, `locations`, `timeline`, `recall`, `notes` e `review`; capítulo, página e status preservados ao retirar e republicar o índice |
-| Commit, push e CI da fase | Pendentes nesta revisão | Publicação do diff revisado e execução dos checks remotos |
-| Deploy da fase | Pendente nesta revisão | Migração e disponibilidade do workflow na instância pública |
+| Commit e push da fase | Confirmados em `999b0c8` | Commit `999b0c81e43891886c5775f39c0f112df363cc39` publicado em `origin/main` |
+| CI da fase | Aprovado | [Run `37988984356`](https://github.com/DiogoJP202/Mnemora/actions/runs/37988984356): backend, frontend e build/smoke test do container concluídos com sucesso no commit da fase |
+| Deploy da fase | Confirmado em 9/10/2026 | `/api/books` com `readingOutlineAvailable`, `memoryPackStatus` e `canRequestMemoryPack`; `/api/health` com `200`; biblioteca e Admin com `401` sem sessão; landing e login renderizados no navegador |
 
 A suíte comprova que unidades em rascunho não tornam o índice público e que entidades em rascunho não tornam o pack disponível. O índice pode ser publicado primeiro e usado para progresso, enquanto o lore permanece indisponível. A publicação posterior do lore libera o conteúdo sem exigir que o leitor remova e adicione o livro novamente; a retirada volta a bloquear as consultas. Também há cobertura para a unicidade do pedido por usuário/livro, para a procedência e hierarquia do sumário importado e para GUIDs privados inacessíveis pelas rotas administrativas filhas.
 
@@ -174,6 +175,8 @@ A migration de atualização conserva o conteúdo editorial preexistente como pu
 A jornada foi executada em `http://localhost:3001`, encaminhando a API para `http://localhost:5199`, porque a porta `5100` estava ocupada por outro projeto. A busca real por `Dom Casmurro` permitiu confirmar a edição, importar o livro, solicitar um pack e conferir que o pedido acompanhava a navegação entre telas. As notas funcionaram antes de existir lore. O Admin encontrou o pedido, iniciou a preparação e consultou o sumário da edição; a fonte respondeu corretamente que não havia sumário. O fluxo prosseguiu com criação de unidades em lote e publicação do índice, permitindo marcar capítulo antes de publicar conhecimento.
 
 Os achados da verificação foram corrigidos: o estado do pedido agora acompanha os dados atualizados ao navegar; a unidade é omitida do payload durante a revisão editorial para preservar o ponto registrado; e o texto acessível da navegação foi contido para eliminar overflow horizontal. Ao retirar e republicar o índice, capítulo, página e status permaneceram preservados. Os testes do provider confirmam que uma fonte com 200 itens válidos é integral e que 201 itens provocam rejeição, sem truncamento; a API traduz esse excesso para `422`.
+
+Após o CI aprovado, a instância em [mnemora-m1y5.onrender.com](https://mnemora-m1y5.onrender.com/) passou a responder com o contrato da fase 16. O pack demonstrativo retornou índice e memória disponíveis, e as respostas da API mantiveram `Cache-Control: no-store`. A checagem pública confirmou a aplicação publicada e a proteção das rotas; a jornada privada completa e o workflow editorial foram exercitados no ambiente local isolado, sem criar dados de teste na demonstração pública.
 
 A auditoria de execução e a auditoria completa são evidências distintas. O gate `scripts/audit-npm.mjs` valida a exceção específica de desenvolvimento e rejeita novas vulnerabilidades `high`/`critical`, mudanças na cadeia ou expiração; ele não declara a auditoria completa livre de achados. A decisão e o procedimento para remover a exceção estão em [dependency-security.md](dependency-security.md).
 
