@@ -330,4 +330,18 @@ public sealed class MemoryPackGenerationSourceTests
     private static GenerationStartRequest ValidRequest() => new(
         [new("Chegada", "Lia chega ao cais.")], "Universo fictício original de teste",
         "https://example.test/source", EditionConfirmed: true, IndexComplete: true);
+
+    [Fact]
+    public void Parsing_bounds_material_before_expanding_into_large_review_responses()
+    {
+        var excessive = string.Join("\n", Enumerable.Range(1, 65).Select(i => $"## Capítulo {i} — Chegada\n"));
+        var parsed = MemoryPackGenerationSourceParser.Parse(excessive);
+        Assert.False(parsed.IsValid);
+        Assert.Equal(64, parsed.Sources.Count);
+        Assert.Contains(parsed.Issues, x => x.Code == "too_many_units" && x.IsBlocking);
+        var oversized = MemoryPackGenerationSourceParser.Parse(new string('é', 300_000));
+        Assert.False(oversized.IsValid);
+        Assert.Empty(oversized.Sources);
+        Assert.Contains(oversized.Issues, x => x.Code == "sources_too_large");
+    }
 }

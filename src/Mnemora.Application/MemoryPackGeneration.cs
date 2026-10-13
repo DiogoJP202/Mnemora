@@ -118,8 +118,13 @@ public static class MemoryPackGenerationSourceParser
 
     // Preserve the administrator's reading order. Numbers detect duplicate/missing
     // chapters; parsing never sorts, drops or fills in narrative material.
-    public static GenerationSourceParseResult Parse(string? text)
+    public static GenerationSourceParseResult Parse(string? text, int maxUnits = 64,
+        int maxBytes = 512 * 1024)
     {
+        maxUnits = Math.Clamp(maxUnits, 1, 64);
+        maxBytes = Math.Clamp(maxBytes, 1, 512 * 1024);
+        if (Encoding.UTF8.GetByteCount(text ?? "") > maxBytes)
+            return new([], [new("sources", "sources_too_large", "O texto excede o limite de fontes desta geração.")]);
         var sources = new List<GenerationSource>();
         var issues = new List<GenerationSourceIssue>();
         var seenNumbers = new HashSet<int>();
@@ -153,6 +158,11 @@ public static class MemoryPackGenerationSourceParser
                 && number > 0 && !string.IsNullOrWhiteSpace(match.Groups["title"].Value))
             {
                 FinishChapter();
+                if (sources.Count >= maxUnits)
+                {
+                    issues.Add(new("sources", "too_many_units", $"Informe no máximo {maxUnits} unidades nesta geração."));
+                    return new(sources, issues);
+                }
                 title = match.Groups["title"].Value.Trim();
                 if (!seenNumbers.Add(number))
                     issues.Add(new($"lines[{lineIndex + 1}]", "duplicate_chapter",

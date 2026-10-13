@@ -25,6 +25,13 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
 builder.Services.AddScoped<KnowledgeReader>();
 builder.Services.AddScoped<BookConsistency>();
 builder.Services.AddScoped<MemoryPackTransfer>();
+builder.Services.Configure<GenerationOptions>(builder.Configuration.GetSection("MemoryPackGeneration"));
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<MemoryPackGenerationSessionStore>();
+builder.Services.AddScoped<MemoryPackGenerationTarget>();
+builder.Services.AddScoped<MemoryPackGenerationService>();
+builder.Services.AddHttpClient<IMemoryPackGenerationProvider, GroqMemoryPackGenerationProvider>(client =>
+    client.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddMemoryCache(options => options.SizeLimit = 1_000);
 builder.Services.AddHttpClient<GoogleBooksProvider>(
     client => client.Timeout = TimeSpan.FromSeconds(8));
@@ -166,6 +173,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+app.Lifetime.ApplicationStopping.Register(() =>
+    app.Services.GetRequiredService<MemoryPackGenerationSessionStore>().Stop());
 
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
@@ -243,6 +252,7 @@ app.MapAdminBookEndpoints();
 app.MapAdminLoreEndpoints();
 app.MapAdminRelationEndpoints();
 app.MapAdminMemoryPackEndpoints();
+app.MapAdminMemoryPackGenerationEndpoints();
 app.Run();
 
 public partial class Program;
