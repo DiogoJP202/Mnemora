@@ -4,7 +4,7 @@
 
 O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, busca externa, cadastro manual de livros, gestão completa da estante, solicitação de memory packs, progresso por índice publicado, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo com workflow editorial e transferência de pacotes completos em JSON. A regra antisspoiler permanece no backend e impede que rascunhos ou dados futuros sejam enviados ao frontend.
 
-Este relatório foi atualizado em 13 de outubro de 2026. A fase 16 foi publicada em `origin/main` no commit `999b0c8`, com CI e deploy confirmados. A fase 17 está implementada e validada localmente, incluindo a jornada em navegador; commit, push, CI e deploy da nova fase aguardam confirmação.
+Este relatório foi atualizado em 13 de outubro de 2026. A fase 16 foi publicada em `origin/main` no commit `999b0c8`, com CI e deploy confirmados. A fase 17 está implementada, validada localmente e publicada em `origin/main` no commit `f5d4eab`, com jornada em navegador, CI aprovado e deploy confirmado pelas novas rotas protegidas na demonstração pública.
 
 ## Histórico por fase
 
@@ -28,7 +28,7 @@ Este relatório foi atualizado em 13 de outubro de 2026. A fase 16 foi publicada
 | Manutenção pós-fase 14 | `8fed8fa` | Atualização do Next.js para o patch de segurança 16.3.8 |
 | 15 — Gestão da estante | `b58552c` | Status e progresso atômicos, limpeza do ponto, metadados da edição na estante/detalhe e remoção isolada com confirmação |
 | 16 — Memory packs editoriais | `999b0c8` | Índice e lore com publicação independente, solicitações do leitor, fila administrativa e importação opcional de sumário da Open Library |
-| 17 — Pacotes completos em JSON | Implementação local; commit pendente | Formato v1, exportação/modelo por edição, validação sem gravação, importação atômica em rascunho e repetição idêntica sem alterações |
+| 17 — Pacotes completos em JSON | `f5d4eab` | Formato v1, exportação/modelo por edição, validação sem gravação, importação atômica em rascunho e repetição idêntica sem alterações |
 
 ## Funcionalidades entregues
 
@@ -196,13 +196,17 @@ A afirmação “zero violações” se limita às páginas e estados visitados 
 | Jornada local em build de produção | Aprovada em desktop de 1280 px e mobile de 360 px, em light/dark | Download do modelo, bloqueio durante edição não salva, JSON duplicado rejeitado, contagens, confirmação da edição, importação e atualização do painel |
 | Publicação e experiência do leitor | Aprovadas | Índice independente, rascunho indisponível, personagens/facções/lugares/timeline/Recall/notas/revisão, alias futuro vazio e retrocesso revogando alias/evento |
 | Repetição e exportação | Aprovadas no navegador/API | Reenvio do pacote publicado sem alteração do progresso/nota; exportação com slugs, sem notas ou publicação no documento |
-| Commit, push, CI e deploy da fase | Pendentes nesta revisão | Publicação e confirmação remota após revisão do diff |
+| Commit e push da fase | Confirmados em `f5d4eab` | Commit `f5d4eabb7cd7e82a6f621a9760d516538c527277` publicado em `origin/main` |
+| CI da fase | Aprovado | [Run `38398380727`](https://github.com/DiogoJP202/Mnemora/actions/runs/38398380727): backend, frontend e container concluídos com sucesso no commit da fase |
+| Deploy da fase | Confirmado em 13/10/2026 | Novas rotas `export`, `validate` e `import` retornam `401` sem sessão; `Cache-Control: no-store`; health e login com `200` |
 
 A jornada usou `http://localhost:3000` e a API em `http://localhost:5100`, com banco isolado ignorado pelo Git. O exemplo original [As Cartas do Farol](examples/memory-pack-v1.json) foi importado em um livro curado recém-criado: três capítulos, quatro entidades, um alias, cinco fatos, duas relações e um evento. A edição e a estrutura foram validadas antes da confirmação, e a publicação continuou pelos controles editoriais existentes. O exemplo não foi instalado na demonstração pública como conteúdo automático.
 
 O JSON original é enviado ao servidor sem serialização intermediária para conservar propriedades duplicadas, que são rejeitadas junto com campos desconhecidos e números enviados como texto. Os testes incluem uma falha forçada no último lote de gravação: a transação remove todo o conteúdo parcialmente inserido e mantém metadados, biblioteca, notas e pedidos; a tentativa seguinte conclui normalmente. Limites exatos são aceitos e excessos são recusados, sem truncamento.
 
 A transferência é bloqueada enquanto houver metadados não salvos no formulário. Exportações e confirmações usam a identidade persistida; uma importação revalida o arquivo e o estado do livro. A versão inicial não substitui nem mescla conteúdo diferente em um livro já preenchido, pois unidades e entidades podem estar vinculadas ao progresso e às notas de leitores. O formato e o procedimento estão descritos em [memory-pack-format.md](memory-pack-format.md).
+
+Após o CI aprovado, a rota de exportação na [demonstração pública](https://mnemora-m1y5.onrender.com/) passou de `404` para `401` sem sessão. Validação e importação também responderam `401`, confirmando que os novos endpoints estão instalados e protegidos. Health e login responderam `200`, e a API manteve `no-store`. O fluxo administrativo completo foi testado localmente em banco isolado, sem criar contas ou importar dados de QA na instância pública.
 
 ## Roteiro de aceite reproduzível
 
