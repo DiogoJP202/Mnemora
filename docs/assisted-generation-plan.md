@@ -95,6 +95,8 @@ Os cenários fictícios devem verificar a suspeita atribuída no capítulo 1, re
 
 ## Riscos que permanecem sob curadoria
 
+O montador inicial aceita descrições e pistas somente como trechos literais das citações verificadas; omite paráfrases desses campos com diagnóstico. Nomes precisam aparecer na citação ou ser rótulos formados por termos sustentados. Identidades e relações apenas suspeitadas ficam retidas para revisão. Essas verificações conservadoras ajudam a evitar contaminação, mas não comprovam a verdade nem a segurança semântica da fonte.
+
 - Um resumo por capítulo pode usar conhecimento retrospectivo: uma citação literal do “futuro traidor” no capítulo inicial continua sendo um spoiler. Extração por prefixo reduz contaminação, mas não prova que a fonte preserva a experiência de leitura.
 - Fontes podem corresponder a outra tradução/edição, omitir o final ou trazer fatos inventados. Confirmação bibliográfica e cobertura explícita não substituem leitura/revisão do material.
 - O v1 não representa validade temporal ou união de identidades condicionada ao progresso. Redação atribuída/temporal e preservação de personas são necessárias para evitar que consolidação produza revelações antecipadas.
