@@ -24,6 +24,7 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
 }
 builder.Services.AddScoped<KnowledgeReader>();
 builder.Services.AddScoped<BookConsistency>();
+builder.Services.AddScoped<MemoryPackTransfer>();
 builder.Services.AddMemoryCache(options => options.SizeLimit = 1_000);
 builder.Services.AddHttpClient<GoogleBooksProvider>(
     client => client.Timeout = TimeSpan.FromSeconds(8));
@@ -241,6 +242,7 @@ app.MapMemoryEndpoints();
 app.MapAdminBookEndpoints();
 app.MapAdminLoreEndpoints();
 app.MapAdminRelationEndpoints();
+app.MapAdminMemoryPackEndpoints();
 app.Run();
 
 public partial class Program;

@@ -2,7 +2,7 @@
 
 > **Remember the story. Not the spoilers.**
 
-Mnemora é um companion de leitura mobile-first para recordar personagens, lugares, facções, relações e acontecimentos sem ultrapassar o ponto atual do leitor. A aplicação também oferece biblioteca pessoal com gestão de status e remoção segura, busca de livros por título, autor ou ISBN, cadastro manual, progresso por unidade de leitura que pode ser limpo, notas privadas, revisão curta de entidades conhecidas, solicitação de memory packs e uma área administrativa com fluxo editorial de preparação e publicação.
+Mnemora é um companion de leitura mobile-first para recordar personagens, lugares, facções, relações e acontecimentos sem ultrapassar o ponto atual do leitor. A aplicação também oferece biblioteca pessoal com gestão de status e remoção segura, busca de livros por título, autor ou ISBN, cadastro manual, progresso por unidade de leitura que pode ser limpo, notas privadas, revisão curta de entidades conhecidas, solicitação de memory packs e uma área administrativa com fluxo editorial de preparação, importação/exportação JSON e publicação.
 
 O projeto é uma PWA em português (`pt-BR`) e usa um universo fictício original no conteúdo demonstrativo.
 
@@ -255,7 +255,7 @@ Todos os endpoints vivem sob `/api`. Rotas de escrita exigem `X-CSRF-TOKEN`; as 
 | Recall | `GET /api/books/{bookId}/recall?q=...` |
 | Notas | `GET/POST /api/books/{bookId}/notes`, `PUT/DELETE /api/notes/{noteId}` |
 | Revisão | `GET /api/books/{bookId}/review`, `POST /api/books/{bookId}/review/{entityId}` |
-| Administração | `/api/admin/books`, workflow `/memory-pack/*`, consulta/importação de `/reading-outline/*`, unidades, entidades, aliases, fatos, relações e previews seguros |
+| Administração | `/api/admin/books`, workflow `/memory-pack/*` incluindo `GET /export`, `POST /validate` e `POST /import`, consulta/importação de `/reading-outline/*`, unidades, entidades, aliases, fatos, relações e previews seguros |
 
 O formulário do livro grava `status`, `currentReadingUnitId` e `currentPage` em uma única chamada a `PATCH /api/library/{bookId}/progress`. Campos ausentes preservam o valor atual; `null` explícito limpa unidade ou página, e todos os valores são validados antes de qualquer mutação. Um status explícito prevalece sobre a inferência automática de `Reading`. Selecionar “Nenhuma — limpar ponto de leitura” restaura o escopo sem progresso e revoga imediatamente o lore anteriormente visível; marcar `Finished` nunca concede conhecimento por conta própria.
 
@@ -277,6 +277,12 @@ O Admin prepara separadamente o índice e o conhecimento. Unidades e lore só po
 
 A migration `MemoryPackWorkflow` preserva como publicados os índices e o lore já existentes em bancos anteriores. Novas importações e cadastros manuais começam sem conteúdo editorial; livros criados pelo Admin começam em rascunho. O seed original é publicado explicitamente.
 
+### Importar um pacote editorial completo
+
+O Admin pode baixar um modelo JSON ligado à edição, preenchê-lo com unidades, entidades, aliases, fatos e relações e validar o arquivo antes de importar. A gravação repete a validação e cria um rascunho atômico em um livro compartilhado sem conteúdo editorial. Ela não modifica metadados, progresso, notas ou histórico de leitores, e não publica automaticamente. Um pacote idêntico pode ser reenviado sem recriar IDs; conteúdo existente diferente retorna conflito e precisa ser editado pelos controles de autoria.
+
+Confira o [formato v1 e seu fluxo](docs/memory-pack-format.md), os limites e o [exemplo original As Cartas do Farol](docs/examples/memory-pack-v1.json). Depois da importação, revise a prévia em vários pontos de leitura e publique índice e lore separadamente. A exportação contém conhecimento completo para o Admin; as telas do leitor continuam recebendo somente conteúdo já revelado.
+
 ## Limitações do MVP
 
 - recuperação de senha ainda apresenta apenas uma orientação na interface;
@@ -287,7 +293,7 @@ A migration `MemoryPackWorkflow` preserva como publicados os índices e o lore j
 - SQLite atende ao uso local e a uma implantação simples, sem a estratégia operacional de um banco multi-instância;
 - o modo offline cobre somente o shell público e assets estáticos, não biblioteca, notas, Admin ou outras respostas privadas;
 - cada usuário pode manter até 200 notas por livro, e o histórico de revisão conserva as 500 atividades mais recentes por usuário e livro;
-- o conteúdo de lore e seus pontos de revelação são curados manualmente pelo Admin.
+- o conteúdo de lore e seus pontos de revelação são curados pelo Admin, com autoria manual ou importação de um pacote revisado; o formato v1 não substitui nem mescla conteúdo existente diferente.
 
 As evoluções candidatas estão registradas em [future.md](future.md).
 
@@ -298,6 +304,7 @@ As evoluções candidatas estão registradas em [future.md](future.md).
 - [Modelo de domínio](docs/domain-model.md)
 - [Motor antisspoiler](docs/spoiler-system.md)
 - [Guia de desenvolvimento](docs/development.md)
+- [Formato de pacote editorial JSON v1](docs/memory-pack-format.md)
 - [Segurança de dependências](docs/dependency-security.md)
 - [Implantação no Render](docs/deployment.md)
 - [Arquitetura técnica](docs/technical-architecture.md)

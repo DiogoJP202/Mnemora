@@ -1,0 +1,131 @@
+{
+  "schemaVersion": 1,
+  "book": {
+    "title": "As Cartas do Farol",
+    "author": "Equipe Mnemora"
+  },
+  "source": {
+    "attribution": "Universo fictício original da Equipe Mnemora, criado para demonstrar o formato v1."
+  },
+  "readingUnits": [
+    {
+      "slug": "capitulo-1",
+      "title": "Uma carta na praia",
+      "safeLabel": "Capítulo 1",
+      "type": "Chapter",
+      "orderIndex": 10
+    },
+    {
+      "slug": "capitulo-2",
+      "title": "O selo dos Guardiões",
+      "safeLabel": "Capítulo 2",
+      "type": "Chapter",
+      "orderIndex": 20
+    },
+    {
+      "slug": "capitulo-3",
+      "title": "A luz retorna",
+      "safeLabel": "Capítulo 3",
+      "type": "Chapter",
+      "orderIndex": 30
+    }
+  ],
+  "entities": [
+    {
+      "slug": "lia",
+      "type": "Character",
+      "name": "Lia",
+      "shortDescription": "Uma aprendiz de cartógrafa que encontra uma carta na praia.",
+      "firstKnownAtUnitSlug": "capitulo-1",
+      "importance": 5,
+      "aliases": [
+        { "alias": "A mensageira da luz", "revealAtUnitSlug": "capitulo-3" }
+      ],
+      "facts": [
+        {
+          "content": "Lia recolhe uma carta fechada na areia.",
+          "memoryHint": "A aprendiz e a carta na praia.",
+          "type": "Event",
+          "importance": 3,
+          "revealAtUnitSlug": "capitulo-1"
+        },
+        {
+          "content": "Lia reconhece na carta o selo dos Guardiões da Maré.",
+          "memoryHint": "O selo identifica quem enviou a carta.",
+          "type": "Background",
+          "importance": 4,
+          "revealAtUnitSlug": "capitulo-2"
+        }
+      ]
+    },
+    {
+      "slug": "guardioes-da-mare",
+      "type": "Faction",
+      "name": "Guardiões da Maré",
+      "shortDescription": "Um grupo de moradores que conserva os sinais costeiros.",
+      "firstKnownAtUnitSlug": "capitulo-2",
+      "importance": 3,
+      "aliases": [],
+      "facts": [
+        {
+          "content": "Os Guardiões pedem ajuda para recuperar uma lente do farol.",
+          "type": "Background",
+          "importance": 3,
+          "revealAtUnitSlug": "capitulo-2"
+        }
+      ]
+    },
+    {
+      "slug": "farol-do-cabo",
+      "type": "Location",
+      "name": "Farol do Cabo",
+      "shortDescription": "Uma torre apagada no extremo da praia.",
+      "firstKnownAtUnitSlug": "capitulo-1",
+      "importance": 4,
+      "aliases": [],
+      "facts": [
+        {
+          "content": "O farol pode ser visto da praia onde Lia encontra a carta.",
+          "type": "Description",
+          "importance": 2,
+          "revealAtUnitSlug": "capitulo-1"
+        }
+      ]
+    },
+    {
+      "slug": "reacendimento-do-farol",
+      "type": "Event",
+      "name": "Reacendimento do farol",
+      "shortDescription": "Lia e os Guardiões devolvem a luz à torre.",
+      "firstKnownAtUnitSlug": "capitulo-3",
+      "importance": 5,
+      "chronologyIndex": 1,
+      "aliases": [],
+      "facts": [
+        {
+          "content": "A lente recuperada permite que o farol volte a orientar os barcos.",
+          "memoryHint": "A lente recuperada devolve a luz à costa.",
+          "type": "Event",
+          "importance": 5,
+          "revealAtUnitSlug": "capitulo-3"
+        }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "sourceEntitySlug": "lia",
+      "targetEntitySlug": "guardioes-da-mare",
+      "relationType": "ColaboraCom",
+      "label": "Ajuda o grupo a recuperar a lente.",
+      "revealAtUnitSlug": "capitulo-2"
+    },
+    {
+      "sourceEntitySlug": "reacendimento-do-farol",
+      "targetEntitySlug": "farol-do-cabo",
+      "relationType": "AconteceEm",
+      "label": "A torre volta a emitir seu sinal.",
+      "revealAtUnitSlug": "capitulo-3"
+    }
+  ]
+}

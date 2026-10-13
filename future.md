@@ -44,7 +44,8 @@ O algoritmo de agendamento não pode conceder visibilidade. Ele seleciona soment
 
 ## Packs de lore e trabalho editorial
 
-- versionar o formato de pack e oferecer importação/exportação validada;
+- acrescentar evolução de schema, migrações entre versões e compatibilidade explícita para o formato de pack;
+- permitir substituição ou mesclagem assistida de pacotes com diff, resolução de conflitos e proteção de referências usadas por leitores;
 - acrescentar etapas formais de revisão, aprovação por outra pessoa e rollback;
 - manter histórico e diff de cada publicação de índice e lore;
 - comparar em uma única tela vários pontos de leitura e versões do conteúdo;
@@ -53,6 +54,8 @@ O algoritmo de agendamento não pode conceder visibilidade. Ele seleciona soment
 - criar ferramentas de colaboração e moderação para packs comunitários.
 
 O produto atual já separa índice e lore em `None`, `Draft` e `Published`, permite preview seguro, registra solicitações dos leitores e pode iniciar o rascunho do índice pelo sumário opcional de uma edição da Open Library. Esse sumário não substitui revisão editorial e nunca cria personagens, fatos, relações ou pontos de revelação.
+
+A [importação/exportação JSON v1](docs/memory-pack-format.md) permite transportar pacotes completos por slugs, baixar um modelo da edição, validar sem gravação e importar um rascunho de forma atômica. Repetições idênticas preservam IDs e publicação; conteúdo diferente existente é recusado, sem substituição ou mesclagem. O arquivo não inclui dados pessoais e nunca publica sozinho. Histórico de versões, revisão colaborativa e rollback continuam sendo evoluções futuras.
 
 Conteúdo público ou comunitário precisará de autoria, licença, atribuição, denúncia e trilha de auditoria.
 

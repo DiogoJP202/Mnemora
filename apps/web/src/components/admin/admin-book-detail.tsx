@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet, apiWrite } from "@/lib/api";
 import type { AdminBook, AdminUnit } from "@/lib/admin-types";
+import { AdminMemoryPackTransfer } from "@/components/admin/admin-memory-pack-transfer";
 
 type Preview = { entities: { id: string; name: string }[]; timeline: unknown[] };
 type Action = "prepare" | "publish-outline" | "publish-lore" | "unpublish-lore" | "unpublish-outline";
@@ -18,23 +19,45 @@ const actionMessages: Record<Action, string> = {
 
 export function AdminBookDetail({ bookId }: { bookId: string }) {
   const [book, setBook] = useState<AdminBook | null>(null);
+  const [savedBook, setSavedBook] = useState<AdminBook | null>(null);
   const [units, setUnits] = useState<AdminUnit[]>([]);
   const [previewUnit, setPreviewUnit] = useState("");
   const [preview, setPreview] = useState<Preview | null>(null);
   const [busy, setBusy] = useState<Action | "save" | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [transferBusy, setTransferBusy] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
     Promise.all([
       apiGet<AdminBook>(`/api/admin/books/${bookId}`),
       apiGet<AdminUnit[]>(`/api/admin/books/${bookId}/reading-units`),
     ]).then(([result, resultUnits]) => {
+      if (cancelled) return;
       setBook(result);
+      setSavedBook(result);
       setUnits(resultUnits);
       setPreviewUnit(resultUnits[0]?.id || "");
-    }).catch((cause) => setError((cause as Error).message));
+    }).catch((cause) => { if (!cancelled) setError((cause as Error).message); });
+    return () => { cancelled = true; };
   }, [bookId]);
+
+  async function refreshContent() {
+    try {
+      const [updated, updatedUnits] = await Promise.all([
+        apiGet<AdminBook>(`/api/admin/books/${bookId}`),
+        apiGet<AdminUnit[]>(`/api/admin/books/${bookId}/reading-units`),
+      ]);
+      setBook(updated);
+      setSavedBook(updated);
+      setUnits(updatedUnits);
+      setPreviewUnit(updatedUnits[0]?.id ?? "");
+      setPreview(null);
+    } catch (cause) {
+      setError(`A importação foi concluída, mas não foi possível atualizar a tela: ${(cause as Error).message}`);
+    }
+  }
 
   async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,6 +73,7 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
         coverUrl: book.coverUrl,
       });
       setBook(updated);
+      setSavedBook(updated);
       setSuccess("Metadados atualizados.");
     } catch (cause) {
       setError((cause as Error).message);
@@ -68,6 +92,7 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
         "POST",
       );
       setBook(updated);
+      setSavedBook(updated);
       setSuccess(actionMessages[action]);
     } catch (cause) {
       setError((cause as Error).message);
@@ -87,7 +112,12 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
     }
   }
 
-  if (!book) return <p>Carregando livro…</p>;
+  if (!book || book.id !== bookId) return error ? <p role="alert">{error}</p> : <p>Carregando livro…</p>;
+  const isBusy = busy !== null || transferBusy;
+  const hasUnsavedMetadata = Boolean(savedBook && (
+    savedBook.title !== book.title || savedBook.author !== book.author
+    || savedBook.description !== book.description || savedBook.coverUrl !== book.coverUrl
+  ));
   const needsPreparation = book.readingOutlineStatus === "None" || book.loreStatus === "None";
   const editionRows = [
     ["Origem", book.catalogKind === "Imported" ? "Catálogo importado" : "Catálogo curado"],
@@ -140,7 +170,7 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
             </p>
           </div>
           {needsPreparation && (
-            <button type="button" className="rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)] disabled:opacity-50" disabled={busy !== null} onClick={() => void transition("prepare")}>
+            <button type="button" className="rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)] disabled:opacity-50" disabled={isBusy} onClick={() => void transition("prepare")}>
               {busy === "prepare" ? "Preparando…" : "Iniciar preparação"}
             </button>
           )}
@@ -152,10 +182,10 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
             <p>{book.unitCount} cadastradas · estado {book.readingOutlineStatus === "Published" ? "publicado" : book.readingOutlineStatus === "Draft" ? "rascunho" : "não iniciado"}</p>
             <div className="flex flex-wrap gap-2">
               {book.readingOutlineStatus === "Draft" && (
-                <button type="button" className="rounded-lg bg-[var(--action-surface)] px-3 py-2 text-sm text-[var(--action-text)]" disabled={busy !== null} onClick={() => void transition("publish-outline")}>Publicar índice</button>
+                <button type="button" className="rounded-lg bg-[var(--action-surface)] px-3 py-2 text-sm text-[var(--action-text)]" disabled={isBusy} onClick={() => void transition("publish-outline")}>Publicar índice</button>
               )}
               {book.readingOutlineStatus === "Published" && (
-                <button type="button" className="rounded-lg border px-3 py-2 text-sm" disabled={busy !== null} onClick={() => void transition("unpublish-outline")}>Editar índice</button>
+                <button type="button" className="rounded-lg border px-3 py-2 text-sm" disabled={isBusy} onClick={() => void transition("unpublish-outline")}>Editar índice</button>
               )}
             </div>
           </li>
@@ -164,10 +194,10 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
             <p>{book.entityCount} entidades · {book.factCount} fatos · {book.relationCount} relações · {book.eventCount} eventos</p>
             <div className="flex flex-wrap gap-2">
               {book.loreStatus === "Draft" && book.readingOutlineStatus === "Published" && (
-                <button type="button" className="rounded-lg bg-[var(--action-surface)] px-3 py-2 text-sm text-[var(--action-text)]" disabled={busy !== null} onClick={() => void transition("publish-lore")}>Publicar conhecimento</button>
+                <button type="button" className="rounded-lg bg-[var(--action-surface)] px-3 py-2 text-sm text-[var(--action-text)]" disabled={isBusy} onClick={() => void transition("publish-lore")}>Publicar conhecimento</button>
               )}
               {book.loreStatus === "Published" && (
-                <button type="button" className="rounded-lg border px-3 py-2 text-sm" disabled={busy !== null} onClick={() => void transition("unpublish-lore")}>Editar conhecimento</button>
+                <button type="button" className="rounded-lg border px-3 py-2 text-sm" disabled={isBusy} onClick={() => void transition("unpublish-lore")}>Editar conhecimento</button>
               )}
             </div>
           </li>
@@ -188,21 +218,30 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
         </section>
       )}
 
+      <AdminMemoryPackTransfer
+        key={`${bookId}:${savedBook?.title}:${savedBook?.author}`}
+        book={savedBook ?? book}
+        disabled={busy !== null || hasUnsavedMetadata}
+        disabledReason={hasUnsavedMetadata ? "Salve os metadados antes de importar ou exportar um pacote." : undefined}
+        onWorkingChange={setTransferBusy}
+        onImported={refreshContent}
+      />
+
       <form onSubmit={save} className="mt-8 grid max-w-4xl gap-4 rounded-2xl border bg-[var(--surface)] p-5">
         <h2 className="text-xl font-semibold">Metadados públicos</h2>
         <label className="grid gap-2 text-sm">Título
-          <input required value={book.title} onChange={(event) => setBook({ ...book, title: event.target.value })} className="rounded-lg border px-3 py-2" />
+          <input required disabled={isBusy} value={book.title} onChange={(event) => setBook({ ...book, title: event.target.value })} className="rounded-lg border px-3 py-2" />
         </label>
         <label className="grid gap-2 text-sm">Autor
-          <input required value={book.author} onChange={(event) => setBook({ ...book, author: event.target.value })} className="rounded-lg border px-3 py-2" />
+          <input required disabled={isBusy} value={book.author} onChange={(event) => setBook({ ...book, author: event.target.value })} className="rounded-lg border px-3 py-2" />
         </label>
         <label className="grid gap-2 text-sm">Descrição pública sem spoilers
-          <textarea rows={3} value={book.description ?? ""} onChange={(event) => setBook({ ...book, description: event.target.value })} className="rounded-lg border px-3 py-2" />
+          <textarea rows={3} disabled={isBusy} value={book.description ?? ""} onChange={(event) => setBook({ ...book, description: event.target.value })} className="rounded-lg border px-3 py-2" />
         </label>
         <label className="grid gap-2 text-sm">URL da capa
-          <input value={book.coverUrl ?? ""} onChange={(event) => setBook({ ...book, coverUrl: event.target.value })} className="rounded-lg border px-3 py-2" />
+          <input disabled={isBusy} value={book.coverUrl ?? ""} onChange={(event) => setBook({ ...book, coverUrl: event.target.value })} className="rounded-lg border px-3 py-2" />
         </label>
-        <button disabled={busy !== null} className="justify-self-start rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)] disabled:opacity-50">
+        <button disabled={isBusy} className="justify-self-start rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)] disabled:opacity-50">
           {busy === "save" ? "Salvando…" : "Salvar metadados"}
         </button>
       </form>
@@ -216,7 +255,7 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
           <select aria-label="Unidade para preview" value={previewUnit} onChange={(event) => setPreviewUnit(event.target.value)} className="rounded-lg border px-3 py-2">
             {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.safeLabel} — {unit.title}</option>)}
           </select>
-          <button type="button" onClick={() => void showPreview()} disabled={!previewUnit} className="rounded-lg border px-4 py-2 disabled:opacity-50">Visualizar</button>
+          <button type="button" onClick={() => void showPreview()} disabled={!previewUnit || isBusy} className="rounded-lg border px-4 py-2 disabled:opacity-50">Visualizar</button>
         </div>
         {preview && (
           <p className="mt-4 text-sm">

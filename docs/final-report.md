@@ -2,9 +2,9 @@
 
 ## Estado da entrega
 
-O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, busca externa, cadastro manual de livros, gestão completa da estante, solicitação de memory packs, progresso por índice publicado, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo com workflow editorial. A regra antisspoiler permanece no backend e impede que rascunhos ou dados futuros sejam enviados ao frontend.
+O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, busca externa, cadastro manual de livros, gestão completa da estante, solicitação de memory packs, progresso por índice publicado, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo com workflow editorial e transferência de pacotes completos em JSON. A regra antisspoiler permanece no backend e impede que rascunhos ou dados futuros sejam enviados ao frontend.
 
-Este relatório foi atualizado em 9 de outubro de 2026. A fase 16 está implementada e validada localmente, incluindo a jornada em navegador, e foi publicada em `origin/main` no commit `999b0c8`. O CI foi aprovado e a atualização no Render foi confirmada pela API pública e pelo navegador.
+Este relatório foi atualizado em 13 de outubro de 2026. A fase 16 foi publicada em `origin/main` no commit `999b0c8`, com CI e deploy confirmados. A fase 17 está implementada e validada localmente, incluindo a jornada em navegador; commit, push, CI e deploy da nova fase aguardam confirmação.
 
 ## Histórico por fase
 
@@ -28,6 +28,7 @@ Este relatório foi atualizado em 9 de outubro de 2026. A fase 16 está implemen
 | Manutenção pós-fase 14 | `8fed8fa` | Atualização do Next.js para o patch de segurança 16.3.8 |
 | 15 — Gestão da estante | `b58552c` | Status e progresso atômicos, limpeza do ponto, metadados da edição na estante/detalhe e remoção isolada com confirmação |
 | 16 — Memory packs editoriais | `999b0c8` | Índice e lore com publicação independente, solicitações do leitor, fila administrativa e importação opcional de sumário da Open Library |
+| 17 — Pacotes completos em JSON | Implementação local; commit pendente | Formato v1, exportação/modelo por edição, validação sem gravação, importação atômica em rascunho e repetição idêntica sem alterações |
 
 ## Funcionalidades entregues
 
@@ -65,6 +66,8 @@ Este relatório foi atualizado em 9 de outubro de 2026. A fase 16 está implemen
 - controles de reordenação de unidades;
 - validação de pertença ao livro e de sequência das revelações;
 - preview por unidade que usa a mesma projeção segura do leitor;
+- exportação editorial JSON v1 sem dados pessoais, modelo ligado à edição, validação com contagens e erros e importação inicial de capítulos e conhecimento em rascunho;
+- importação idêntica sem duplicar ou substituir conteúdo, com preservação de GUIDs, publicação e vínculos pessoais;
 - pack demonstrativo original e curto, provisionado por seed idempotente;
 - criação opcional de Admin por variáveis de ambiente, sem segredo versionado.
 
@@ -181,6 +184,25 @@ Após o CI aprovado, a instância em [mnemora-m1y5.onrender.com](https://mnemora
 A auditoria de execução e a auditoria completa são evidências distintas. O gate `scripts/audit-npm.mjs` valida a exceção específica de desenvolvimento e rejeita novas vulnerabilidades `high`/`critical`, mudanças na cadeia ou expiração; ele não declara a auditoria completa livre de achados. A decisão e o procedimento para remover a exceção estão em [dependency-security.md](dependency-security.md).
 
 A afirmação “zero violações” se limita às páginas e estados visitados pela auditoria automatizada. Ela não substitui avaliação manual completa com leitores de tela, diferentes tecnologias assistivas ou uma auditoria de conteúdo editorial.
+
+### Evidências da fase 17
+
+| Verificação | Resultado observado | Cobertura principal |
+| --- | --- | --- |
+| `dotnet test Mnemora.slnx --configuration Release --no-restore` | 74 testes aprovados | 11 testes novos: validação sem gravação, importação/rollback/retry, idempotência, exportação sem dados privados, edição, grafo, limites, JSON estrito, autorização/antiforgery e revelação com retrocesso |
+| Builds Release do backend e de produção do Next.js; lint/TypeScript | Aprovados | Serviço de transferência, endpoints, contrato, interface administrativa e helper de envio do JSON original |
+| `node --test tests/security/audit-npm.test.mjs tests/pwa/*.test.mjs` e gate npm real | 40 testes e gate aprovados | Limites do cache privado e exceção de desenvolvimento já documentada, sem ampliar sua abrangência ou prazo |
+| Auditoria NuGet e verificação EF | Nenhum pacote vulnerável; nenhuma mudança de modelo pendente | Fase sem migration e sem novas dependências |
+| Jornada local em build de produção | Aprovada em desktop de 1280 px e mobile de 360 px, em light/dark | Download do modelo, bloqueio durante edição não salva, JSON duplicado rejeitado, contagens, confirmação da edição, importação e atualização do painel |
+| Publicação e experiência do leitor | Aprovadas | Índice independente, rascunho indisponível, personagens/facções/lugares/timeline/Recall/notas/revisão, alias futuro vazio e retrocesso revogando alias/evento |
+| Repetição e exportação | Aprovadas no navegador/API | Reenvio do pacote publicado sem alteração do progresso/nota; exportação com slugs, sem notas ou publicação no documento |
+| Commit, push, CI e deploy da fase | Pendentes nesta revisão | Publicação e confirmação remota após revisão do diff |
+
+A jornada usou `http://localhost:3000` e a API em `http://localhost:5100`, com banco isolado ignorado pelo Git. O exemplo original [As Cartas do Farol](examples/memory-pack-v1.json) foi importado em um livro curado recém-criado: três capítulos, quatro entidades, um alias, cinco fatos, duas relações e um evento. A edição e a estrutura foram validadas antes da confirmação, e a publicação continuou pelos controles editoriais existentes. O exemplo não foi instalado na demonstração pública como conteúdo automático.
+
+O JSON original é enviado ao servidor sem serialização intermediária para conservar propriedades duplicadas, que são rejeitadas junto com campos desconhecidos e números enviados como texto. Os testes incluem uma falha forçada no último lote de gravação: a transação remove todo o conteúdo parcialmente inserido e mantém metadados, biblioteca, notas e pedidos; a tentativa seguinte conclui normalmente. Limites exatos são aceitos e excessos são recusados, sem truncamento.
+
+A transferência é bloqueada enquanto houver metadados não salvos no formulário. Exportações e confirmações usam a identidade persistida; uma importação revalida o arquivo e o estado do livro. A versão inicial não substitui nem mescla conteúdo diferente em um livro já preenchido, pois unidades e entidades podem estar vinculadas ao progresso e às notas de leitores. O formato e o procedimento estão descritos em [memory-pack-format.md](memory-pack-format.md).
 
 ## Roteiro de aceite reproduzível
 

@@ -11,6 +11,25 @@ export async function apiWrite<T = void>(
   method: "POST" | "PUT" | "PATCH" | "DELETE",
   body?: unknown,
 ): Promise<T> {
+  return apiWriteBody<T>(path, method, body === undefined ? undefined : JSON.stringify(body));
+}
+
+export class ApiResponseError extends Error {
+  constructor(message: string, readonly payload: unknown) {
+    super(message);
+    this.name = "ApiResponseError";
+  }
+}
+
+export async function apiWriteJsonDocument<T>(path: string, json: string): Promise<T> {
+  return apiWriteBody<T>(path, "POST", json);
+}
+
+async function apiWriteBody<T>(
+  path: string,
+  method: "POST" | "PUT" | "PATCH" | "DELETE",
+  body: string | undefined,
+): Promise<T> {
   const csrf = await apiGet<{ token: string }>("/api/auth/csrf");
   const response = await fetch(path, {
     method,
@@ -20,9 +39,12 @@ export async function apiWrite<T = void>(
       "X-CSRF-TOKEN": csrf.token,
       ...(body === undefined ? {} : { "Content-Type": "application/json" }),
     },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body,
   });
-  if (!response.ok) throw new Error(await errorMessage(response));
+  if (!response.ok) {
+    const payload: unknown = await response.clone().json().catch(() => null);
+    throw new ApiResponseError(await errorMessage(response), payload);
+  }
   return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
 }
 

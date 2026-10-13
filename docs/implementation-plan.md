@@ -38,6 +38,7 @@ Cada fase termina com validações pertinentes, inspeção do diff e de segredos
 | 14 | Metadados bibliográficos por edição e confirmação da importação | Contratos, deduplicação, cache e jornada por ISBN |
 | 15 | Gestão completa da estante: status em todos os livros, atualização atômica, limpeza do ponto, metadados persistidos e remoção segura | Atomicidade e isolamento, build/lint e jornada desktop/360 px |
 | 16 | Workflow editorial de memory packs, índice independente, solicitações do leitor e importação opcional de sumário da Open Library | Estados de publicação, ausência de vazamento por rascunho, idempotência, autorização, migration de upgrade, builds e jornada desktop/360 px |
+| 17 | Importação e exportação de pacotes editoriais JSON v1 completos, modelo por edição e validação sem gravação | Contrato estrito, referências e fronteiras de revelação, atomicidade, idempotência, conflito sem substituição, autorização e jornada Admin |
 
 ### Aceite da fase 16
 
@@ -49,11 +50,23 @@ Cada fase termina com validações pertinentes, inspeção do diff e de segredos
 - Notas gerais funcionam em livros sem pack, enquanto vínculos a unidades ou entidades respeitam publicação e progresso.
 - O upgrade preserva conteúdo publicado anterior e mantém novas importações sem conteúdo editorial; as rotas administrativas filhas não dão acesso a livros privados.
 
+### Aceite da fase 17
+
+- O Admin exporta o conteúdo completo por slugs ou baixa um modelo vazio ligado à edição, sem GUIDs, estados de publicação ou dados dos leitores.
+- O JSON v1 inclui unidades hierárquicas, entidades, aliases, fatos, pistas, relações e cronologia de eventos; campos desconhecidos, enums inválidos e referências incoerentes são recusados.
+- A validação confere edição, limites e pontos de revelação e devolve contagens e problemas sem gravar. A importação valida novamente antes da gravação atômica.
+- Um pacote novo só entra em livro compartilhado sem conteúdo editorial e com estados `None` ou `Draft`; índice e lore são criados em `Draft`. Conteúdo diferente existente retorna conflito sem substituição.
+- Reenviar um pacote idêntico é uma operação sem gravação que preserva IDs e estados. Metadados bibliográficos, progresso, notas, atividades e solicitações pessoais não são substituídos.
+- O arquivo completo, a validação e a importação ficam restritos ao Admin; livros privados não são expostos. Escritas mantêm antiforgery e respostas sem cache.
+- O Admin revisa o rascunho pela prévia segura antes de publicar índice e lore separadamente. Importar não aumenta o conhecimento disponível para leitores.
+- A documentação inclui o [contrato v1](memory-pack-format.md) e um [exemplo fictício original](examples/memory-pack-v1.json), sem tratar textos gerados como fatos de livros reais.
+
 ## Riscos e decisões
 
 - O conteúdo demonstrativo será um universo fictício com textos originais e curtos. Metadados externos fornecem título, autor e capa, mas nenhuma descrição externa entra automaticamente no lore.
 - Livros importados sem pack de lore permanecem na biblioteca com estado apropriado e podem receber um índice publicado antes do conhecimento.
 - Sumários externos são apenas uma ajuda para criar unidades: a disponibilidade varia por edição, e personagens, facções, relações, eventos e pontos de revelação continuam sob curadoria humana.
+- Um arquivo JSON completo transporta conteúdo curado; não busca nem inventa lore. O pacote precisa corresponder à edição, e limites estruturais não substituem a revisão da segurança dos nomes, resumos, imagens, pistas e rótulos.
 - Recuperação de senha, IA, busca semântica e repetição espaçada ficam para versões futuras. A revisão MVP registra feedback sem algoritmo de agendamento.
 - Um Admin de desenvolvimento é criado apenas por seed explícito com credenciais fornecidas em variáveis de ambiente; nenhum segredo é versionado.
 - O `origin` configurado é o repositório do projeto. O trabalho prossegue na branch `main`, vazia no início.

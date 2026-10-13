@@ -36,3 +36,16 @@ export type AdminEntityDetail = {
   entity: AdminEntity; aliases: AdminAlias[];
   facts: AdminFact[]; relations: AdminRelation[];
 };
+
+export type MemoryPackCounts = {
+  readingUnits: number; entities: number; aliases: number;
+  facts: number; relations: number; events: number;
+};
+export type MemoryPackValidation = {
+  isValid: boolean; alreadyImported: boolean;
+  counts: MemoryPackCounts;
+  issues: { path: string; message: string }[];
+};
+export type MemoryPackImportResult = {
+  alreadyImported: boolean; counts: MemoryPackCounts;
+};
