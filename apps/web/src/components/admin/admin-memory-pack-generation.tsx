@@ -14,7 +14,7 @@ type Props = {
   onGenerated: (selection: GeneratedMemoryPackSelection) => void;
 };
 type Outline = { attribution: string; sourceUrl: string; items: { title: string; level: number; page: number | null }[] };
-type Working = "parse" | "outline" | "run" | "refresh" | "result" | "cancel" | null;
+type Working = "parse" | "outline" | "run" | "refresh" | "result" | "cancel" | "configuration" | null;
 type Operation = { operationId: string; expectedRevision: number };
 const button = "min-h-11 rounded-lg border border-[var(--line)] px-4 py-2 text-sm disabled:opacity-50";
 const primary = `${button} bg-[var(--action-surface)] text-[var(--action-text)]`;
@@ -139,6 +139,18 @@ export function AdminMemoryPackGeneration({ book, disabled, disabledReason, onWo
     if (controller.current !== current) return;
     controller.current = null;
     if (mounted.current) { setWorking(null); onWorkingChange(false); }
+  }
+
+  async function checkConfiguration() {
+    const current = begin("configuration");
+    if (!current) return;
+    try {
+      const available = await apiGet<GenerationAvailability>(`${base}/availability`, { signal: current.signal });
+      if (current.signal.aborted) return;
+      setAvailability(available);
+      setNotice(available.enabled ? "Configuração carregada. Prepare as fontes para gerar o rascunho. A chave ainda será validada pelo Groq na primeira geração." : "Disponibilidade atualizada. Confira os impedimentos abaixo.");
+    } catch (cause) { if (!current.signal.aborted) setError(message(cause)); }
+    finally { finish(current); }
   }
 
   async function parseSources() {
@@ -291,6 +303,17 @@ export function AdminMemoryPackGeneration({ book, disabled, disabledReason, onWo
       <p className="mt-2 text-xs text-[var(--ink-soft)]">Sessão temporária: reinício ou expiração elimina os artefatos no servidor. Baixe o JSON e o relatório para conservá-los.</p>
       {!availability && !error && <p role="status" className="mt-4 text-sm">Verificando disponibilidade…</p>}
       {availability?.reason && <p role="status" className="mt-4 rounded-lg border border-[var(--line)] p-3 text-sm">{availability.reason}</p>}
+      {availability?.configuration && !availability.configuration.ready && <div className="mt-4 rounded-xl border border-[var(--line)] bg-[var(--paper)] p-4">
+        <h3 className="font-semibold">Configurar a geração assistida</h3>
+        <ul className="mt-3 list-disc space-y-2 pl-5 text-sm">{availability.configuration.issues.map((issue) => <li key={`${issue.code}:${issue.setting}`} className="break-words">{issue.message}</li>)}</ul>
+        {availability.configuration.localSetup ? <>
+          <p className="mt-3 text-sm">No PowerShell, na pasta do projeto, execute:</p>
+          <pre className="mt-2 overflow-x-auto rounded-lg border border-[var(--line)] p-3 text-sm"><code>{".\\scripts\\configure-generation.ps1"}</code></pre>
+          <p className="mt-3 text-sm">O comando pede a chave com entrada oculta e salva a configuração no seu perfil de desenvolvimento, fora do Git. Depois, reinicie a API na porta 5100 e verifique novamente. Variáveis antigas no terminal têm prioridade sobre essa configuração.</p>
+        </> : <p className="mt-3 text-sm">No Render, configure as variáveis acima em Environment do serviço da API e aplique o deploy. Uma chave definida somente no seu computador não configura o servidor online.</p>}
+        <p className="mt-3 text-sm text-[var(--ink-soft)]">Use o Groq Free, sem upgrade pago. A chave pertence ao backend: não a cole neste formulário, no JSON ou no chat. Esta verificação não chama o provedor.</p>
+      </div>}
+      {(availability && !availability.enabled || !availability && error) && <button type="button" disabled={disabled || working !== null} onClick={() => void checkConfiguration()} className={`${button} mt-4`}>{working === "configuration" ? "Verificando…" : "Verificar configuração novamente"}</button>}
       {disabledReason && <p className="mt-4 text-sm">{disabledReason}</p>}
       {otherSession && <p className="mt-4 rounded-lg border border-[var(--line)] p-3 text-sm">Você tem uma sessão {otherActive ? "em andamento" : "concluída ou cancelada"} em outro livro. <Link className="underline" href={`/admin/books/${otherSession.bookId}`}>Abrir essa sessão</Link>{otherActive ? " para retomar ou cancelar antes de iniciar outra." : "."}</p>}
       {error && <p role="alert" className="form-alert mt-4 rounded-lg border p-3 text-sm">{error}</p>}

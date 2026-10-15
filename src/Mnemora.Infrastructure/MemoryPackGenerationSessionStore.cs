@@ -416,7 +416,7 @@ public sealed class MemoryPackGenerationSessionStore(IOptions<GenerationOptions>
 
     private byte[] BuildReport(Session session, MemoryPackDocument document,
         IReadOnlyList<GenerationReportEvidence> evidence) => Serialize(new GenerationReport(
-        limits.Provider, limits.Model, "generation-v1", session.Attribution, session.SourceUrl,
+        limits.Provider, limits.Model, GenerationPrompt.Version, session.Attribution, session.SourceUrl,
         session.IndexComplete, !session.IndexComplete || session.Coverage.Any(unit => unit.Status != "Generated"),
         Hash(Serialize(document)), session.Calls, Counter(session.Tokens), Counter(session.EstimatedTokens),
         [.. session.Coverage], evidence, [.. session.Diagnostics]));

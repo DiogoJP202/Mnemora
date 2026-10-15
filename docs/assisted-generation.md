@@ -15,6 +15,26 @@ MemoryPackGeneration__ApiKey=
 
 Preencha a chave somente no armazenamento de segredos do ambiente. O bloco acima não é uma configuração funcional sem chave. A API não carrega `.env` automaticamente; `.env.example` documenta os nomes. Não use prefixo `NEXT_PUBLIC_`, não coloque a chave em `apps/web/.env.local` e não a registre em logs. Ausência de chave, configuração inválida, modelo ou provedor diferente mantêm o recurso indisponível. Não há descoberta de modelos, URL de provedor configurável ou fallback.
 
+### Configuração local persistente no PowerShell
+
+Na raiz do repositório, execute:
+
+```powershell
+.\scripts\configure-generation.ps1
+```
+
+O script solicita a chave com `Read-Host -AsSecureString`, envia as quatro opções ao `dotnet user-secrets set` por **stdin** (sem chave nos argumentos ou no histórico de comandos) e não chama o Groq. O projeto da API tem um `UserSecretsId` estável; o armazenamento fica no perfil do usuário, fora do repositório, e é carregado automaticamente somente em `Development`. User secrets é armazenamento de desenvolvimento, sem criptografia em repouso, e não configura o Render. Não copie esse arquivo para produção.
+
+Reinicie a API após salvar:
+
+```powershell
+dotnet run --project src/Mnemora.Api
+```
+
+Uma variável `$env:MemoryPackGeneration__ApiKey` definida em um terminal só existe naquele processo e seus filhos; outro PowerShell não a herda. Variáveis de ambiente também têm prioridade sobre user secrets: remova variáveis antigas ou vazias do terminal da API caso continuem substituindo a configuração salva. O script conserva outros segredos e limites já cadastrados.
+
+O painel Admin agora mostra os impedimentos específicos: desativação, chave ausente ou com caracteres inválidos, provedor/modelo não suportado e limites fora dos tetos. **Verificar configuração novamente** atualiza esse diagnóstico sem enviar fontes nem chamar a IA. Uma configuração pronta comprova apenas que as opções foram carregadas e aceitas localmente; credenciais, plano e quota só são conferidos pelo serviço externo durante a geração. O painel nunca recebe a chave, nem mesmo parcialmente. Os detalhes de configuração exigem Admin; não foram adicionadas rotas para salvar segredos pelo navegador.
+
 O objetivo operacional é custo de API zero. **Antes da habilitação, confirme no console que a organização está no Groq Free, sem upgrade pago.** O aplicativo não conhece o plano de cobrança nem impede cobrança em uma conta paga. Confira os [limites efetivos](https://console.groq.com/docs/rate-limits) e o [faturamento](https://console.groq.com/docs/billing-faqs) na organização. Os limites publicados e a disponibilidade de modelos podem mudar; os limites locais não garantem a capacidade gratuita de um livro inteiro.
 
 Os resumos são enviados ao Groq. Confira o [tratamento de dados](https://console.groq.com/docs/your-data) e configure Zero Data Retention na organização antes de usar material sensível. Use somente fontes cujo envio seja autorizado. O [schema estrito](https://console.groq.com/docs/structured-outputs) garante uma estrutura de resposta suportada, não a verdade nem a segurança editorial do conteúdo.
@@ -66,6 +86,8 @@ Só o resumo corrente e o registro compacto de entidades/aliases **já conhecido
 
 Nome, tipo, descrição e apresentação inicial de uma entidade permanecem congelados. Informação posterior entra como fato ou alias posterior; personas não são fundidas automaticamente. Descrições iniciais e pistas são aceitas somente como trechos literais sustentados, ou omitidas com diagnóstico. Suspeitas exigem atribuição; identidades e relações apenas suspeitadas são retidas para revisão. Repetições exatas preservam a primeira revelação. Eventos retrospectivos são revelados onde foram comprovados, sem retrodatação. `imageUrl` e `chronologyIndex` ficam `null`; importância inicial é `1`. Não há chamada final que reescreva o livro inteiro.
 
+O prompt `generation-v2` explicita o formato `paragraphs: [{id, text}]` e a extração de apresentações literais mesmo quando `knownEntities` está vazio ou o resumo é curto. Isso não exige um número mínimo de candidatos nem relaxa a conferência de citações. A versão usada aparece no relatório e no log operacional.
+
 Essas regras reduzem contaminação entre capítulos, mas não comprovam semanticamente afirmações ou nomes. O contrato v1 não representa fusão de identidades dependente do progresso nem substituição automática de fatos antigos. A curadoria continua responsável pela redação atribuída e temporal. Após publicar, as projeções do `KnowledgeReader` continuam filtrando lore antes dos DTOs do leitor, incluindo Recall e timeline.
 
 ## API administrativa
@@ -74,7 +96,7 @@ Base: `/api/admin/books/{bookId}/memory-pack/generations`. Todas as rotas exigem
 
 | Método e sufixo | Entrada e comportamento |
 | --- | --- |
-| `GET /availability` | Disponibilidade, motivo, limites e referência da sessão do próprio Admin |
+| `GET /availability` | Disponibilidade, motivo, limites, referência da sessão do próprio Admin e `configuration: { ready, localSetup, issues: [{code, setting, message}] }`, sem valores de segredos |
 | `POST /parse` | `{ "text": "## Capítulo 1 — ..." }`; separa fontes e retorna problemas, sem criar sessão |
 | `POST /` | `sources: [{title, summary}]`, `attribution`, `sourceUrl` nulo ou HTTPS, `editionConfirmed`, `indexComplete`; cria sessão e retorna `201` |
 | `GET /{runId}` | Estado, revisão, cobertura e diagnósticos; não faz chamada de IA |
@@ -119,6 +141,12 @@ O Next.js usa `experimental.proxyTimeout: 120000`, superior ao timeout do proved
 
 CI e testes locais usam provedores HTTP e relógios falsos, sem chave/API real. Os testes .NET abrangem parser, alvo, schema e limites do provedor, evidências, montagem, isolamento de prefixos, sessões, Admin/CSRF, concorrência, idempotência, quotas, cancelamento e expiração. O pacote gerado atravessa a validação/importação atuais e as projeções antes/no ponto/depois e em retrocesso, incluindo Recall e timeline. Uma propriedade compara a projeção até `k` do pacote completo com o pacote gerado apenas até `k`, sem depender dos IDs.
 
-Na avaliação local de navegador, uma chamada fictícia de 35 segundos atravessou a origem do Next.js, completando quatro capítulos; os downloads tiveram hashes correspondentes e foram importados em rascunho. Também foram conferidos cancelamento, recuperação de referência após reload, falha de rede com retomada manual, edição que invalida confirmações, parcial com fonte ausente e confirmação obrigatória, desktop, 360 px e temas claro/escuro. Respostas autenticadas de estado, avanço e resultado mantiveram `no-store`. Isso comprova integração e fronteiras com dados controlados, **não** a qualidade, latência ou capacidade real do Groq Free. Nenhum consumo real foi medido nesta entrega.
+Na avaliação inicial de navegador, uma chamada fictícia de 35 segundos atravessou a origem do Next.js, completando quatro capítulos; os downloads tiveram hashes correspondentes e foram importados em rascunho. Também foram conferidos cancelamento, recuperação de referência após reload, falha de rede com retomada manual, edição que invalida confirmações, parcial com fonte ausente e confirmação obrigatória, desktop, 360 px e temas claro/escuro. Respostas autenticadas de estado, avanço e resultado mantiveram `no-store`. Isso comprova integração e fronteiras com dados controlados, **não** a qualidade, latência ou capacidade real do Groq Free. Naquela etapa, nenhum consumo real foi medido.
+
+### Avaliação real da configuração e do prompt — 15/10/2026
+
+Após configurar user secrets e reiniciar a API, a disponibilidade local liberou o formulário. Uma chamada real com um resumo fictício de um capítulo, usando o prompt anterior, contabilizou 1.189 tokens e retornou listas vazias: o validador bloqueou a importação por ausência de entidades. A comparação com o mesmo resumo e `generation-v2`, em API/SQLite isolados, contabilizou 2.121 tokens em uma chamada e produziu uma unidade, cinco entidades, dois fatos, uma relação e oito evidências. O resultado passou pela validação v1; o SHA-256 dos bytes canônicos correspondeu ao relatório. O índice não foi confirmado como completo, portanto o pacote permaneceu parcial e dependente de revisão explícita.
+
+As duas chamadas somaram 3.310 tokens reportados; nenhum fallback ou repetição automática foi utilizado. Os resultados não foram importados nem publicados. Esta amostra pequena não comprova ganho estatístico do prompt, qualidade de um livro inteiro, capacidade diária ou ausência de custo em uma organização paga. CI e os 259 testes do backend continuam usando provedores falsos; lint/build e os 40 testes de PWA/segurança também passaram. O script de configuração foi verificado com entrada fictícia, sem expor a chave em argumentos ou saída.
 
 Antes de avaliar material real, comece com poucas unidades fictícias e meça uso retornado, estimativas, duração e descartes no relatório. Revise o pacote contra as fontes e o preview. Não prometa completar um livro denso apenas pela quantidade de capítulos. Consulte o [relatório de entrega](final-report.md) e o [plano aprovado](assisted-generation-plan.md).

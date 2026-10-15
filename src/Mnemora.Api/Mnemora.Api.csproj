@@ -4,6 +4,7 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>mnemora-api-04e3d03e-b3a4-460f-b9d1-911335a2bc75</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

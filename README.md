@@ -133,6 +133,8 @@ API_BASE_URL=http://localhost:5100
 
 `API_BASE_URL` é lida no servidor Next.js. Ela não contém credenciais do usuário.
 
+Para habilitar **Gerar pacote com IA** localmente com uma chave Groq, execute `.\scripts\configure-generation.ps1` na raiz do projeto e reinicie a API. O comando solicita a chave com entrada oculta e salva as opções em .NET user secrets, fora do Git; a configuração sobrevive à abertura de outro terminal. O painel informa o que falta e permite verificar novamente sem chamar o provedor. Em produção, configure as variáveis no host da API. Consulte o [guia de geração assistida](docs/assisted-generation.md) para configuração, limites e revisão.
+
 ## Banco, migrations e seed
 
 Restaure a ferramenta e aplique as migrations versionadas a partir da raiz:

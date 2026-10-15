@@ -5,6 +5,11 @@ using System.Text.RegularExpressions;
 
 namespace Mnemora.Application;
 
+public static class GenerationPrompt
+{
+    public const string Version = "generation-v2";
+}
+
 public sealed class GenerationOptions
 {
     public bool Enabled { get; set; }

@@ -63,6 +63,7 @@ export type GenerationSession = {
 export type GenerationAvailability = {
   enabled: boolean; reason: string | null; model: string; maxUnits: number; maxSourceBytes: number;
   minCallIntervalSeconds: number; existingSession: GenerationSession | null;
+  configuration?: { ready: boolean; localSetup: boolean; issues: { code: string; setting: string; message: string }[] };
 };
 export type GenerationEvidence = {
   unitSlug: string; sourceHash: string; paragraphId: string; quote: string; justification: string; itemId: string; jsonPath: string;

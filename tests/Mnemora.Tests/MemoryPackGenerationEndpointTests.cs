@@ -76,10 +76,73 @@ public sealed class MemoryPackGenerationEndpointTests
         Assert.Equal("no-store", availabilityResponse.Headers.CacheControl?.ToString());
         var availability = await Read(availabilityResponse);
         Assert.False(availability["enabled"]!.GetValue<bool>());
+        Assert.False(availability["configuration"]!["ready"]!.GetValue<bool>());
+        Assert.True(availability["configuration"]!["localSetup"]!.GetValue<bool>());
+        Assert.Contains(availability["configuration"]!["issues"]!.AsArray(), issue =>
+            issue!["code"]!.GetValue<string>() == "generation_disabled");
         Assert.DoesNotContain("fake-test-key-no-network", availability.ToJsonString());
         Assert.Equal(HttpStatusCode.ServiceUnavailable,
             (await Write(fixture.Admin, fixture.Path(), Request())).StatusCode);
         Assert.Equal(0, fixture.Provider.Calls);
+    }
+
+    [Theory]
+    [InlineData("missing", "api_key_missing", "ApiKey")]
+    [InlineData("whitespace", "api_key_invalid", "ApiKey")]
+    [InlineData("control", "api_key_invalid", "ApiKey")]
+    [InlineData("provider", "provider_unsupported", "Provider")]
+    [InlineData("model", "model_unsupported", "Model")]
+    [InlineData("limit", "limit_invalid", "MaxTokens")]
+    [InlineData("memory", "memory_limits_inconsistent", "MaxGlobalBytes")]
+    public async Task Configuration_diagnostics_explain_blockers_without_exposing_values_or_calling_provider(
+        string mode, string code, string setting)
+    {
+        const string sensitiveValue = "private-test-configuration-value";
+        using var fixture = await Fixture.CreateAsync(configure: options =>
+        {
+            options.ApiKey = sensitiveValue;
+            switch (mode)
+            {
+                case "missing": options.ApiKey = ""; break;
+                case "whitespace": options.ApiKey = sensitiveValue + " extra"; break;
+                case "control": options.ApiKey = sensitiveValue + "\u0001x"; break;
+                case "provider": options.Provider = sensitiveValue; break;
+                case "model": options.Model = sensitiveValue; break;
+                case "limit": options.MaxTokens = 180_001; break;
+                case "memory": options.MaxGlobalBytes = 1; break;
+            }
+        });
+        var response = await fixture.Admin.GetAsync(fixture.Path("availability"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        var availability = await Read(response);
+        Assert.False(availability["enabled"]!.GetValue<bool>());
+        var diagnostics = availability["configuration"]!;
+        Assert.False(diagnostics["ready"]!.GetValue<bool>());
+        Assert.Contains(diagnostics["issues"]!.AsArray(), issue =>
+            issue!["code"]!.GetValue<string>() == code && issue["setting"]!.GetValue<string>() == setting);
+        Assert.DoesNotContain(sensitiveValue, availability.ToJsonString());
+        Assert.Null(availability["apiKey"]);
+        Assert.Null(diagnostics["apiKey"]);
+        Assert.Equal(HttpStatusCode.ServiceUnavailable,
+            (await Write(fixture.Admin, fixture.Path(), Request())).StatusCode);
+        Assert.Equal(0, fixture.Provider.Calls);
+    }
+
+    [Fact]
+    public async Task Configured_availability_does_not_validate_credentials_by_spending_provider_requests()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        for (var attempt = 0; attempt < 2; attempt++)
+        {
+            var availability = await Read(await fixture.Admin.GetAsync(fixture.Path("availability")));
+            Assert.True(availability["enabled"]!.GetValue<bool>());
+            Assert.True(availability["configuration"]!["ready"]!.GetValue<bool>());
+            Assert.Empty(availability["configuration"]!["issues"]!.AsArray());
+            Assert.DoesNotContain("fake-test-key-no-network", availability.ToJsonString());
+        }
+        Assert.Equal(0, fixture.Provider.Calls);
+        await fixture.AssertNoEditorialContentAsync();
     }
 
     [Fact]
@@ -476,7 +539,8 @@ public sealed class MemoryPackGenerationEndpointTests
             $"/api/admin/books/{bookId ?? BookId}/memory-pack/generations" + (suffix.Length == 0 ? "" : $"/{suffix}");
         public string TransferPath(string suffix) => $"/api/admin/books/{BookId}/memory-pack/{suffix}";
 
-        public static async Task<Fixture> CreateAsync(bool enabled = true, IInterceptor? interceptor = null)
+        public static async Task<Fixture> CreateAsync(bool enabled = true, IInterceptor? interceptor = null,
+            Action<GenerationOptions>? configure = null)
         {
             var directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"mnemora-generation-{Guid.NewGuid():N}");
             Directory.CreateDirectory(directory);
@@ -505,6 +569,7 @@ public sealed class MemoryPackGenerationEndpointTests
                         options.ApiKey = "fake-test-key-no-network";
                         options.Provider = "Groq";
                         options.Model = "openai/gpt-oss-120b";
+                        configure?.Invoke(options);
                     });
                 });
             });

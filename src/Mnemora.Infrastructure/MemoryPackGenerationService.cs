@@ -17,22 +17,8 @@ public sealed class MemoryPackGenerationService(
     private readonly GenerationOptions configuration = options.Value;
     private readonly MemoryPackGenerationAssembler assembler = new(options.Value);
 
-    public static bool ConfigurationAvailable(GenerationOptions options) => options.Enabled
-        && !string.IsNullOrWhiteSpace(options.ApiKey)
-        && !options.ApiKey.Trim().Any(character => char.IsWhiteSpace(character) || char.IsControl(character))
-        && string.Equals(options.Provider, "Groq", StringComparison.OrdinalIgnoreCase)
-        && options.Model == "openai/gpt-oss-120b"
-        && options.MaxUnits is > 0 and <= 64 && options.MaxSourceBytes is > 0 and <= 512 * 1024
-        && options.MaxDocumentBytes is > 0 and <= 2 * 1024 * 1024
-        && options.MaxReportBytes is > 0 and <= 2 * 1024 * 1024
-        && options.MaxSessionBytes is > 0 and <= 8 * 1024 * 1024
-        && options.MaxGlobalBytes is > 0 and <= 16 * 1024 * 1024
-        && options.MaxGlobalBytes >= options.MaxSessionBytes && options.MaxSessions is > 0 and <= 2
-        && options.TimeoutSeconds is > 0 and <= 90 && options.IdleMinutes is > 0 and <= 30
-        && options.LifetimeMinutes is > 0 and <= 120 && options.MaxAttemptsPerUnit is > 0 and <= 2
-        && options.MaxCalls is > 0 and <= 80 && options.MaxOutputTokens is > 0 and <= 2_500
-        && options.MaxInputTokens is > 0 and <= 4_000 && options.MaxTokens is > 0 and <= 180_000
-        && options.MinCallIntervalSeconds is >= 0 and <= 86_400;
+    public static bool ConfigurationAvailable(GenerationOptions options) =>
+        GenerationConfiguration.Inspect(options).Count == 0;
 
     public async Task<GenerationSessionStatus> StartAsync(Guid ownerId, Guid bookId,
         GenerationStartRequest request, CancellationToken cancellationToken = default)
@@ -89,7 +75,7 @@ public sealed class MemoryPackGenerationService(
             var assembled = assembler.Apply(snapshot.Document, input, result.Extraction, snapshot.Report.Evidence);
             var status = store.Complete(lease, assembled.Document, assembled.Evidence, assembled.Diagnostics, false);
             logger.LogInformation("Generation {RunId} unit {UnitSlug} completed using {Model} prompt {PromptVersion} in {DurationMs} ms; tokens {Tokens}",
-                runId, input.UnitSlug, configuration.Model, "generation-v1", watch.ElapsedMilliseconds,
+                runId, input.UnitSlug, configuration.Model, GenerationPrompt.Version, watch.ElapsedMilliseconds,
                 (long)result.InputTokens + result.OutputTokens);
             return status;
         }

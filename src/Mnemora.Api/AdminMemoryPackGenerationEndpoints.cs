@@ -25,20 +25,22 @@ public static class AdminMemoryPackGenerationEndpoints
 
         group.MapGet("/availability", async (Guid bookId, HttpContext context,
             MemoryPackGenerationTarget target, MemoryPackGenerationSessionStore store,
-            IOptions<GenerationOptions> configured, CancellationToken cancellationToken) =>
+            IOptions<GenerationOptions> configured, IHostEnvironment environment, CancellationToken cancellationToken) =>
             await ExecuteAsync(context, async () =>
             {
                 string? reason = null;
                 try { await target.ReadAsync(bookId, cancellationToken: cancellationToken); }
                 catch (GenerationException exception) when (exception.StatusCode == 409) { reason = exception.Message; }
                 var options = configured.Value;
-                var enabled = MemoryPackGenerationService.ConfigurationAvailable(options);
+                var issues = GenerationConfiguration.Inspect(options);
+                var enabled = issues.Count == 0;
                 if (!enabled && reason is null)
-                    reason = "A geração assistida precisa ser configurada pelo responsável pelo serviço. A importação manual continua disponível.";
+                    reason = "Configure a geração assistida no backend para iniciar. A importação manual continua disponível.";
                 return Results.Ok(new
                 {
-                    enabled = enabled && reason is null, reason, options.Model, options.MaxUnits,
+                    enabled = enabled && reason is null, reason, model = "openai/gpt-oss-120b", options.MaxUnits,
                     options.MaxSourceBytes, options.MinCallIntervalSeconds,
+                    configuration = new { ready = enabled, issues, localSetup = environment.IsDevelopment() },
                     existingSession = store.FindExisting(CurrentUser.Id(context.User))
                 });
             }));
