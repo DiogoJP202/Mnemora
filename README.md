@@ -316,6 +316,7 @@ As evoluções candidatas estão registradas em [future.md](future.md).
 - [Guia de desenvolvimento](docs/development.md)
 - [Formato de pacote editorial JSON v1](docs/memory-pack-format.md)
 - [Geração assistida: operação e limites](docs/assisted-generation.md)
+- [Próximas fases: adição e preparação automatizadas](docs/automated-preparation-plan.md)
 - [Segurança de dependências](docs/dependency-security.md)
 - [Implantação no Render](docs/deployment.md)
 - [Arquitetura técnica](docs/technical-architecture.md)
