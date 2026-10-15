@@ -34,7 +34,8 @@ Este relatório foi atualizado em 15 de outubro de 2026. As fases 18 a 21 foram 
 | 20 — Sessões e API | `fbb28f9` | Estado em memória, Admin/CSRF, posse, idempotência, revisões, quotas, expiração e cancelamento |
 | 21 — Jornada no Admin | `7f85756` | Entrada, progresso, revisão por capítulo, downloads, JSON editável, parcial confirmado e transferência existente |
 | 22 — Qualidade e entrega | `429e3b9` | Regressões, auditorias, avaliação controlada, guia de configuração e limitações |
-| 23 — Busca administrativa | Commit `phase 23: import book editions directly in admin` | Busca por título/autor/ISBN, confirmação, importação compartilhada e levantamento de fontes dos três primeiros Harry Potter |
+| 23 — Busca administrativa | `375587e` | Busca por título/autor/ISBN, confirmação, importação compartilhada e levantamento de fontes dos três primeiros Harry Potter |
+| 24 — Descoberta de fontes | Commit `phase 24: discover bounded public book references` | Sumário da edição, Wikidata, links da Wikipedia, correspondência bibliográfica, procedência e lacunas |
 
 ## Funcionalidades entregues
 
@@ -256,7 +257,22 @@ Em `/admin/books`, **Buscar livro para preparar** consulta o catálogo compartil
 
 A jornada usou o build de produção do Next.js em `3019`, uma API Kestrel isolada em `5198` e um proxy de QA em `127.0.0.1:3018`, encaminhando `/api` para essa API. Os processos e dados locais do usuário em `3000`/`5100` foram preservados. Os testes de integração verificam os headers `no-store` e a política de antiforgery; o proxy temporário de QA não é código de implantação.
 
-O [levantamento de fontes dos três primeiros Harry Potter](harry-potter-source-assessment.md) encontrou metadados, mas nenhum sumário nas três edições amostradas. Fontes narrativas completas por capítulo ainda não foram verificadas. A fase 23 não promete geração automática de conhecimento: descoberta/coleta e preparação integrada seguem nas fases propostas [24–28](automated-preparation-plan.md).
+O [levantamento de fontes dos três primeiros Harry Potter](harry-potter-source-assessment.md) encontrou metadados, mas nenhum sumário nas três edições amostradas. Fontes narrativas completas por capítulo ainda não foram verificadas. A descoberta limitada foi acrescentada na fase 24 abaixo; coleta e preparação integrada seguem nas fases propostas [25–28](automated-preparation-plan.md).
+
+## Entrega da fase 24 — descoberta limitada de fontes
+
+O detalhe administrativo oferece **Encontrar referências públicas**. O backend consulta a edição exata Open Library e até três candidatos Wikidata; distingue identificador de obra e ISBN e descarta adaptações em filme/jogo e tipos não reconhecidos. Links da Wikipedia são descobertos pelo Wikidata, sem coleta de seus textos. Fontes gerais não viram entrada do gerador. O relatório baixável registra identidade, atribuição, idioma, URL, data e hash da resposta de descoberta.
+
+| Verificação | Resultado | Evidência / limite |
+| --- | --- | --- |
+| `dotnet test Mnemora.slnx --configuration Release --no-restore` | 251 aprovados | 22 casos novos: Admin/auth/CSRF, alvo privado, identidade do servidor, cache, alterações durante consulta, concorrência/429 e cancelamento, respostas inválidas, limites, redirects e falhas parciais |
+| Build e lint web | Aprovados | Painel com estados, candidatos, procedência, download e bloqueio por edição não salva |
+| PWA e auditoria Node | 40 aprovados | Sem alteração das fronteiras de cache privado |
+| Três livros reais no navegador | Consultas e downloads aprovados | Pedra Filosofal, Câmara Secreta e Prisioneiro de Azkaban; quatro referências cada, identificador de obra correspondente, zero sumários e narrativa não verificada |
+| Jornada pela origem do Next.js | Aprovada em `127.0.0.1:3018`, API isolada `5198` | Login, lista, detalhe, descoberta, revisão de procedência e download; geração desabilitada e nenhum consumo Groq |
+| Layout | 360 e 1280 px, claro/escuro | Painel, links e hashes sem rolagem horizontal |
+
+Não houve migration, gravação de conteúdo editorial ou publicação. São no máximo três chamadas por consulta sem cache, dois hosts HTTPS fixos sem redirects, 1 MiB por resposta, oito segundos por chamada e prazo de 25 segundos; uma operação global por processo e cache por identidade. O [guia de descoberta](source-discovery.md) documenta limitações e o significado do hash de links descobertos. Os dados reais encontrados estão no [levantamento de Harry Potter](harry-potter-source-assessment.md). A coleta narrativa e sua organização por capítulo continuam sendo a fase 25.
 
 ## Roteiro de aceite reproduzível
 

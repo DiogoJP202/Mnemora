@@ -31,8 +31,10 @@ Não foi verificada uma fonte pública, completa, permitida e segmentada por cap
 
 ## Consequências para a implementação
 
+Na validação da fase 24, a jornada pelo Next.js em `127.0.0.1:3018`, com API e SQLite isolados, consultou as três edições da tabela em APIs reais e baixou os relatórios. Cada livro retornou quatro referências: edição Open Library, item Wikidata e links da Wikipedia em português e inglês. A correspondência da obra veio de `P648`: [Pedra Filosofal — Q43361](https://www.wikidata.org/wiki/Q43361), [Câmara Secreta — Q47209](https://www.wikidata.org/wiki/Q47209) e [Prisioneiro de Azkaban — Q47598](https://www.wikidata.org/wiki/Q47598). Filme/jogo homônimos foram descartados pelo tipo. Os três resultados mantiveram `OutlineStatus=Missing`, zero itens de sumário e `NarrativeStatus=NotVerified`; nenhum capítulo ou entidade foi criado. Isso confirma o funcionamento da descoberta limitada, sem comprovar fontes narrativas completas.
+
 1. **Fase 23 entregue:** o Admin pesquisa os títulos ou ISBNs, revisa metadados e importa/reutiliza o livro, sem cadastrar título e autoria à mão. A importação não cria capítulos, entidades, vínculo pessoal ou publicação.
-2. **Fase 24:** devolver candidatos a fontes com procedência, idioma, edição e cobertura, destacando ambiguidade e ausência de sumário. Não prometer pacote completo ao importar esses livros.
+2. **Fase 24 entregue:** candidatos a referências com procedência, idioma e correspondência, destacando ambiguidade e ausência de sumário. Não há promessa de pacote completo ao importar esses livros; o [guia](source-discovery.md) delimita as APIs consultadas e a amostra.
 3. **Fase 25:** aceitar somente fontes com unidade e correspondência verificadas; preservar lacunas. Dados gerais e artigos retrospectivos continuam fora do contexto de extração inicial.
 4. **Avaliação editorial:** comparar cada prefixo conhecido, suspeitas, aliases e revelações posteriores. Citações textuais comprovam origem, mas não garantem veracidade nem ausência de spoiler.
 

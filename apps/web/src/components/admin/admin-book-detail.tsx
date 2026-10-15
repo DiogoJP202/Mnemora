@@ -6,6 +6,7 @@ import { apiGet, apiWrite } from "@/lib/api";
 import type { AdminBook, AdminUnit, GeneratedMemoryPackSelection } from "@/lib/admin-types";
 import { AdminMemoryPackTransfer } from "@/components/admin/admin-memory-pack-transfer";
 import { AdminMemoryPackGeneration } from "@/components/admin/admin-memory-pack-generation";
+import { AdminSourceDiscovery } from "@/components/admin/admin-source-discovery";
 
 type Preview = { entities: { id: string; name: string }[]; timeline: unknown[] };
 type Action = "prepare" | "publish-outline" | "publish-lore" | "unpublish-lore" | "unpublish-outline";
@@ -29,6 +30,7 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
   const [success, setSuccess] = useState("");
   const [transferBusy, setTransferBusy] = useState(false);
   const [generationBusy, setGenerationBusy] = useState(false);
+  const [sourcesBusy, setSourcesBusy] = useState(false);
   const [generatedSelection, setGeneratedSelection] = useState<GeneratedMemoryPackSelection | null>(null);
 
   useEffect(() => {
@@ -117,7 +119,7 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
   }
 
   if (!book || book.id !== bookId) return error ? <p role="alert">{error}</p> : <p>Carregando livro…</p>;
-  const isBusy = busy !== null || transferBusy || generationBusy;
+  const isBusy = busy !== null || transferBusy || generationBusy || sourcesBusy;
   const hasUnsavedMetadata = Boolean(savedBook && (
     savedBook.title !== book.title || savedBook.author !== book.author
     || savedBook.description !== book.description || savedBook.coverUrl !== book.coverUrl
@@ -222,10 +224,17 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
         </section>
       )}
 
+      <AdminSourceDiscovery
+        key={`${bookId}:${savedBook?.title}:${savedBook?.author}`}
+        book={savedBook ?? book}
+        disabled={busy !== null || transferBusy || generationBusy || hasUnsavedMetadata}
+        onWorkingChange={setSourcesBusy}
+      />
+
       <AdminMemoryPackGeneration
         key={bookId}
         book={savedBook ?? book}
-        disabled={busy !== null || transferBusy || hasUnsavedMetadata}
+        disabled={busy !== null || transferBusy || sourcesBusy || hasUnsavedMetadata}
         disabledReason={hasUnsavedMetadata ? "Salve os metadados antes de iniciar ou continuar uma geração." : undefined}
         onWorkingChange={setGenerationBusy}
         onGenerated={setGeneratedSelection}
@@ -234,7 +243,7 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
       <AdminMemoryPackTransfer
         key={`${bookId}:${savedBook?.title}:${savedBook?.author}:${generatedSelection?.id ?? "file"}`}
         book={savedBook ?? book}
-        disabled={busy !== null || generationBusy || hasUnsavedMetadata}
+        disabled={busy !== null || generationBusy || sourcesBusy || hasUnsavedMetadata}
         disabledReason={hasUnsavedMetadata ? "Salve os metadados antes de importar ou exportar um pacote." : undefined}
         onWorkingChange={setTransferBusy}
         onImported={refreshContent}

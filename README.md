@@ -284,7 +284,13 @@ Em `/admin/books`, use **Buscar livro para preparar** com título, autor ou ISBN
 
 `GET /api/admin/books/search?q=...` pesquisa somente o catálogo compartilhado e os provedores configurados. `POST /api/admin/books/external` recebe apenas `externalProvider` e `externalId`; o servidor consulta os metadados e importa ou reutiliza o cadastro. Ambas exigem Admin, têm rate limit e respostas sem cache; a escrita exige antiforgery. Livros privados não são expostos. O serviço de importação é compartilhado com o leitor, preenche somente campos ausentes e preserva identidade, conteúdo editorial, publicação e progresso existentes. A importação administrativa não cria associação na biblioteca pessoal, pedido de pack, capítulos ou lore.
 
-Depois da importação, os controles existentes permitem consultar sumário, preparar fontes, gerar ou importar um pacote em rascunho e revisá-lo antes de publicar. **Busca automática de fontes narrativas ainda não está implementada.** Veja o [plano das próximas fases](docs/automated-preparation-plan.md) e o [levantamento dos três primeiros livros de Harry Potter](docs/harry-potter-source-assessment.md).
+Depois da importação, os controles existentes permitem consultar sumário, preparar fontes, gerar ou importar um pacote em rascunho e revisá-lo antes de publicar. Veja o [plano das próximas fases](docs/automated-preparation-plan.md) e o [levantamento dos três primeiros livros de Harry Potter](docs/harry-potter-source-assessment.md).
+
+### Descobrir referências públicas
+
+No detalhe administrativo, use **Encontrar referências públicas → Descobrir fontes públicas**. O servidor confere a edição exata na Open Library, procura até três candidatos no Wikidata, descarta tipos não literários e apresenta links da Wikipedia em português e inglês quando disponíveis. O painel distingue ISBN, vínculo da obra e correspondência não confirmada; mostra sumário candidato, lacunas e procedência e permite baixar o levantamento. Não exige chave adicional nem chama IA.
+
+**Coleta automática de fontes narrativas ainda não está implementada.** Referências e sinopses gerais podem conter spoilers; não são enviadas ao gerador nem transformadas em capítulos ou lore. A API é `POST /api/admin/books/{id}/source-discovery`, protegida por Admin/CSRF, rate limit, HTTP limitado e respostas sem cache privado. Consulte o [guia de descoberta e seus limites](docs/source-discovery.md).
 
 ### Importar um pacote editorial completo
 
@@ -326,6 +332,7 @@ As evoluções candidatas estão registradas em [future.md](future.md).
 - [Geração assistida: operação e limites](docs/assisted-generation.md)
 - [Próximas fases: adição e preparação automatizadas](docs/automated-preparation-plan.md)
 - [Cobertura inicial: três primeiros livros de Harry Potter](docs/harry-potter-source-assessment.md)
+- [Descoberta de fontes públicas: operação e limites](docs/source-discovery.md)
 - [Segurança de dependências](docs/dependency-security.md)
 - [Implantação no Render](docs/deployment.md)
 - [Arquitetura técnica](docs/technical-architecture.md)

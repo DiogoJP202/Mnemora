@@ -1,6 +1,6 @@
 # Automação da adição de livros e preparação editorial
 
-Evolução após as fases 18–22 e o primeiro teste real com Groq. **A fase 23 está implementada:** busca e importação de edições no Admin, usando o serviço compartilhado com o leitor. As fases 24–28 abaixo continuam propostas; descoberta narrativa, coleta e preparação automática ainda não estão implementadas. A prioridade solicitada é reduzir o cadastro manual e a coleta de fontes pelo Admin, aproveitando APIs públicas e pesquisa de fontes antes da organização por IA. O orçamento anterior de API zero continua valendo; não habilitar fornecedores ou fallbacks pagos.
+Evolução após as fases 18–22 e o primeiro teste real com Groq. **Fases 23 e 24 implementadas:** busca/importação de edições no Admin e descoberta limitada de sumário e referências públicas na Open Library e no Wikidata, com links da Wikipedia. As fases 25–28 abaixo continuam propostas; coleta narrativa e preparação automática ainda não estão implementadas. A prioridade solicitada é reduzir o cadastro manual e a coleta de fontes pelo Admin, aproveitando APIs públicas e pesquisa de fontes antes da organização por IA. O orçamento anterior de API zero continua valendo; não habilitar fornecedores ou fallbacks pagos.
 
 ## Experiência pretendida
 
@@ -85,7 +85,7 @@ A geração atual limita 64 unidades, duas horas e 180 mil tokens por sessão. L
 
 Durabilidade requer persistência das etapas, revisões e fontes autorizadas, com retenção limitada. Isso é uma evolução do modelo atual, que deliberadamente não criou migrations. Não apresentar o SQLite efêmero do Render Free como armazenamento durável: suspensão/redeploy pode apagar banco e jobs, e o serviço suspenso não continua processando. A estratégia de hospedagem/persistência deve ser definida antes de prometer execução contínua em produção; não contratar serviços pagos automaticamente.
 
-## Fases propostas
+## Fases entregues e propostas
 
 Cada fase mantém a regra do projeto: verificar o que mudou, revisar diff/segredos, commit e push para `origin main`; resolver falha de push antes da seguinte.
 
@@ -97,5 +97,7 @@ Cada fase mantém a regra do projeto: verificar o que mudou, revisar diff/segred
 | 26 — Orquestração retomável | Estados/etapas persistidos, worker limitado, deduplicação, pausa por quota e cancelamento | Fechar a página não perde o progresso em armazenamento durável; nenhum consumo duplicado; limites e ambiente efêmero tratados explicitamente |
 | 27 — Preparação integrada | “Adicionar e preparar”, revisão por exceções, rascunho automático e reaproveitamento de pacote publicado | Caminho normal sem colar resumos/exportar JSON; revisão e publicação continuam explícitas; livro preenchido nunca é sobrescrito |
 | 28 — Avaliação e entrega | Livros reais representativos, fontes, qualidade, custo operacional e regressões | Relatório distingue dados encontrados, inferências rejeitadas e lacunas; fronteiras, Recall, timeline, retrocesso e autorização preservados |
+
+Operação entregue da fase 24: [descoberta de fontes públicas](source-discovery.md). Ela consulta APIs fixas, apresenta candidatos e não coleta texto de artigos, não preenche fontes do gerador e não cria conteúdo editorial.
 
 A fase 23 reutiliza uma integração funcional e remove o cadastro duplicado no Admin. A avaliação inicial prioriza os três primeiros livros de Harry Potter, indicados pelo usuário; os resultados e lacunas estão no [levantamento de fontes](harry-potter-source-assessment.md). A avaliação das próximas fases deve contemplar pelo menos um caso com fonte narrativa estruturada e outro com cobertura insuficiente. Ausência de fonte é um resultado esperado e visível, não um motivo para gerar conteúdo sem evidência.

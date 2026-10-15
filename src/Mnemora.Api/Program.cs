@@ -34,6 +34,22 @@ builder.Services.AddScoped<MemoryPackGenerationService>();
 builder.Services.AddHttpClient<IMemoryPackGenerationProvider, GroqMemoryPackGenerationProvider>(client =>
     client.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddMemoryCache(options => options.SizeLimit = 1_000);
+builder.Services.AddSingleton(services => new BookSourceDiscovery(
+    services.GetRequiredService<IHttpClientFactory>().CreateClient,
+    services.GetRequiredService<Microsoft.Extensions.Caching.Memory.IMemoryCache>(),
+    services.GetRequiredService<TimeProvider>()));
+foreach (var discoverySource in new[]
+{
+    (Name: "discovery-openlibrary", Origin: "https://openlibrary.org/"),
+    (Name: "discovery-wikidata", Origin: "https://www.wikidata.org/")
+})
+    builder.Services.AddHttpClient(discoverySource.Name, client =>
+    {
+        client.BaseAddress = new Uri(discoverySource.Origin);
+        client.Timeout = TimeSpan.FromSeconds(8);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mnemora/1.0 (+https://github.com/DiogoJP202/Mnemora)");
+        client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHttpClient<GoogleBooksProvider>(
     client => client.Timeout = TimeSpan.FromSeconds(8));
 builder.Services.AddHttpClient<OpenLibraryProvider>(client =>
@@ -254,6 +270,7 @@ app.MapAdminLoreEndpoints();
 app.MapAdminRelationEndpoints();
 app.MapAdminMemoryPackEndpoints();
 app.MapAdminMemoryPackGenerationEndpoints();
+app.MapAdminSourceDiscoveryEndpoints();
 app.Run();
 
 public partial class Program;
