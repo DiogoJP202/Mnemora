@@ -2,9 +2,9 @@
 
 ## Estado da entrega
 
-O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, busca externa, cadastro manual de livros, gestão completa da estante, solicitação de memory packs, progresso por índice publicado, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo com workflow editorial e transferência de pacotes completos em JSON. A regra antisspoiler permanece no backend e impede que rascunhos ou dados futuros sejam enviados ao frontend.
+O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, busca externa, cadastro manual de livros, gestão completa da estante, solicitação de memory packs, progresso por índice publicado, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo com workflow editorial, geração assistida e transferência de pacotes completos em JSON. A regra antisspoiler permanece no backend e impede que rascunhos ou dados futuros sejam enviados ao frontend do leitor. O Admin mantém acesso editorial ao documento completo.
 
-Este relatório foi atualizado em 13 de outubro de 2026. A fase 16 foi publicada em `origin/main` no commit `999b0c8`, com CI e deploy confirmados. A fase 17 está implementada, validada localmente e publicada em `origin/main` no commit `f5d4eab`, com jornada em navegador, CI aprovado e deploy confirmado pelas novas rotas protegidas na demonstração pública.
+Este relatório foi atualizado em 15 de outubro de 2026. As fases 18 a 21 foram publicadas em `origin/main`, e a fase 22 encerra as regressões e a documentação da geração assistida. O [CI da fase 21](https://github.com/DiogoJP202/Mnemora/actions/runs/38750203393) aprovou backend, frontend e imagem Docker com health check. A funcionalidade permanece desabilitada sem configuração de Groq no backend; não foi habilitada nem avaliada com API real na demonstração pública. As evidências de deploy das fases anteriores continuam registradas como histórico.
 
 ## Histórico por fase
 
@@ -29,6 +29,11 @@ Este relatório foi atualizado em 13 de outubro de 2026. A fase 16 foi publicada
 | 15 — Gestão da estante | `b58552c` | Status e progresso atômicos, limpeza do ponto, metadados da edição na estante/detalhe e remoção isolada com confirmação |
 | 16 — Memory packs editoriais | `999b0c8` | Índice e lore com publicação independente, solicitações do leitor, fila administrativa e importação opcional de sumário da Open Library |
 | 17 — Pacotes completos em JSON | `f5d4eab` | Formato v1, exportação/modelo por edição, validação sem gravação, importação atômica em rascunho e repetição idêntica sem alterações |
+| 18 — Contratos e fontes | `1a5fd69` | Parser de capítulos, lacunas, confirmação da edição, limites e alvo vazio |
+| 19 — Extração incremental | `1ab7f44` | Provedor Groq com schema estrito, montagem determinística, citações verificadas e apresentações congeladas |
+| 20 — Sessões e API | `fbb28f9` | Estado em memória, Admin/CSRF, posse, idempotência, revisões, quotas, expiração e cancelamento |
+| 21 — Jornada no Admin | `7f85756` | Entrada, progresso, revisão por capítulo, downloads, JSON editável, parcial confirmado e transferência existente |
+| 22 — Qualidade e entrega | Commit `phase 22: verify and document assisted generation` | Regressões, auditorias, avaliação controlada, guia de configuração e limitações |
 
 ## Funcionalidades entregues
 
@@ -68,6 +73,9 @@ Este relatório foi atualizado em 13 de outubro de 2026. A fase 16 foi publicada
 - preview por unidade que usa a mesma projeção segura do leitor;
 - exportação editorial JSON v1 sem dados pessoais, modelo ligado à edição, validação com contagens e erros e importação inicial de capítulos e conhecimento em rascunho;
 - importação idêntica sem duplicar ou substituir conteúdo, com preservação de GUIDs, publicação e vínculos pessoais;
+- geração assistida opcional sobre resumos por capítulo para livros compartilhados vazios, com confirmação de edição e cobertura;
+- evidências por item em relatório separado, downloads com hash, revisão de resultados parciais e aviso de relatório desatualizado ao editar o JSON;
+- sessões temporárias isoladas por Admin, avanço controlado pelo servidor e importação dos candidatos pelo fluxo existente em rascunho;
 - pack demonstrativo original e curto, provisionado por seed idempotente;
 - criação opcional de Admin por variáveis de ambiente, sem segredo versionado.
 
@@ -208,6 +216,29 @@ A transferência é bloqueada enquanto houver metadados não salvos no formulár
 
 Após o CI aprovado, a rota de exportação na [demonstração pública](https://mnemora-m1y5.onrender.com/) passou de `404` para `401` sem sessão. Validação e importação também responderam `401`, confirmando que os novos endpoints estão instalados e protegidos. Health e login responderam `200`, e a API manteve `no-store`. O fluxo administrativo completo foi testado localmente em banco isolado, sem criar contas ou importar dados de QA na instância pública.
 
+### Evidências das fases 18 a 22 — geração assistida
+
+| Verificação | Resultado observado | Cobertura e limites |
+| --- | --- | --- |
+| `dotnet test Mnemora.slnx --configuration Release --no-restore` | 218 aprovados, nenhum ignorado | Contratos/fontes, alvo, Groq falso, montagem/evidências, projeções de prefixo, sessões/API e regressões anteriores |
+| Lint e build de produção Next.js | Aprovados | Tipos e interface administrativa; proxy configurado em 120 segundos |
+| Testes Node de PWA e segurança | 40 aprovados | 4 de manifesto/cache e 36 do gate de auditoria |
+| Auditoria NuGet e restore com warnings de segurança como erro | Aprovados | Nenhum pacote vulnerável identificado nas fontes atuais |
+| `node scripts/audit-npm.mjs` | Aprovado com exceção de desenvolvimento existente | Cadeia exata de `braces` 3.0.3 / `GHSA-vfj7-8cjw-p6xm`, dev-only, validade até 9 de novembro de 2026 UTC; nenhum novo pacote introduzido |
+| Verificação EF de alterações de modelo | Nenhuma pendência | Nenhuma migration ou tabela nova para geração |
+| Navegador pela origem `127.0.0.1:3018` | Fluxo completo aprovado com API isolada em `5198` | Login Admin real; provedor fictício; primeira resposta demorou 35 segundos e atravessou o proxy sem corte aos 30 segundos |
+| Downloads e importação | SHA-256 do JSON correspondeu ao relatório | Quatro capítulos, três entidades, três fatos, um alias, uma relação e um evento; documento validado e importado em rascunho sem publicação |
+| Revisão editorial e edição | Confirmações invalidadas após editar | Aviso de evidências da versão original; nova revisão/validação exigida; nenhum relatório embutido no pacote |
+| Parcial, cancelamento e retomada no navegador | Aprovados | Fonte ausente explícita, índice não confirmado, bloqueio até reconhecer lacunas, cancelamento da chamada ativa, recuperação da referência após reload e retomada manual após falha de rede simulada |
+| Responsividade e tema | Desktop e 360 px conferidos | Sem overflow horizontal na jornada inspecionada; temas claro e escuro; sem erros inesperados de aplicação; mensagem de rede traduzida para português |
+| Cache privado pela origem do Next.js | `Cache-Control: no-store` observado | Respostas autenticadas de estado, avanço e resultado, incluindo após a retomada; exclusão de `/api`, `/app` e `/admin` também coberta pelos testes do service worker |
+| Preview após importar | Evento ausente no capítulo 1, presente no 4 e ausente novamente ao retroceder | Mesma projeção segura usada pelo leitor, sem publicar o rascunho |
+| CI da fase 21 | Backend, frontend e container aprovados | Build Linux e smoke de `/api/health`; nenhuma chamada real de IA |
+
+Os testes de projeção com provedor controlado comparam o pacote completo com cada prefixo, desconsiderando IDs, e cobrem ausência de progresso, antes/exatamente/depois, alias e relação tardios, evento retrospectivo, Recall e retrocesso. A API cobre autenticação, Admin, CSRF, posse de sessão, livro privado/preenchido, mudança da edição, repetição e concorrência, quotas/429, cancelamento e expiração. Um teste de concorrência intercepta a leitura do livro para impedir que uma revisão futura prevista vincule um resumo antigo ao próximo capítulo.
+
+Nenhum teste, CI ou jornada de navegador consumiu a API do Groq. Os tokens e tempos fictícios servem para validar contabilidade e integração, não para estimar qualidade ou capacidade real de um livro. A entrega não garante veracidade, ausência semântica de spoilers, faturamento gratuito da organização ou execução completa de livros longos. O [guia operacional](assisted-generation.md) explica ativação somente com Groq Free conferido, tratamento de dados, limites e downloads antes da expiração/redeploy. Fontes e resultados temporários não são gravados no banco nem no cache da PWA.
+
 ## Roteiro de aceite reproduzível
 
 ### 1. Preparar dependências
@@ -271,6 +302,8 @@ Abra `http://localhost:3000`. O rewrite padrão encaminha `/api` para a API loca
 6. Retire o lore e depois o índice e confirme que a disponibilidade é revogada. Em sessão de leitor, confirme `403` para rotas administrativas; sem sessão, confirme `401` nas rotas privadas.
 7. Confirme `Cache-Control: no-store` nas respostas `/api` e que Cache Storage não contém entradas de `/api`, `/app` ou `/admin`.
 
+Para avaliar a geração assistida, siga o [guia específico](assisted-generation.md): configure o provedor somente no backend, comece com as fontes fictícias em um livro compartilhado vazio, confira cobertura/evidências e baixe os dois arquivos. Valide e importe em rascunho, compare o preview nos capítulos 1 e 4 e em retrocesso, e teste um lote com resumo ausente. A suíte automatizada faz esses cenários com provedores falsos e não exige chave.
+
 ### 6. Executar os gates automatizados
 
 ```powershell
@@ -289,12 +322,13 @@ Para verificar a PWA em condições reais de service worker, execute o build de 
 ## Limitações e trabalho futuro
 
 - Recuperação de senha é informativa no MVP; não há envio de e-mail nem fluxo de redefinição.
-- Busca semântica, geração por IA e enriquecimento automático de lore não estão implementados.
+- Busca semântica, respostas por IA ao leitor e obtenção automática de fontes narrativas não estão implementadas. A geração editorial assistida exige fontes fornecidas e revisão humana.
 - A revisão registra feedback, mas não agenda cartões nem implementa repetição espaçada.
 - A Open Library funciona sem chave; o Google Books só participa quando `GOOGLE_BOOKS_API_KEY` está configurada.
 - Número de páginas, categorias e rótulo de edição são usados na busca e confirmação, mas não são persistidos no modelo atual de `Book`.
 - Um livro importado ou manual traz somente metadados, não um pack de lore. Uma edição Open Library compartilhada pode oferecer um sumário para iniciar o índice, mas a disponibilidade varia e seus títulos ainda exigem revisão administrativa. Livros manuais permanecem privados e fora da fila editorial.
-- Personagens, facções, lugares, fatos, relações, eventos e pontos de revelação não vêm dos providers atuais e continuam dependendo de autoria e curadoria humanas.
+- Personagens, facções, lugares, fatos, relações, eventos e pontos de revelação não vêm dos providers bibliográficos; podem ser propostos pela geração assistida e continuam dependendo de curadoria humana.
+- A geração exige livro compartilhado vazio e não mescla conteúdo, não lê PDF/EPUB e não oferece retomada após reinício. Suas sessões e contadores estão na memória de uma única instância; fontes devem respeitar o conhecimento do capítulo, pois citações literais também podem antecipar revelações.
 - SQLite é adequado ao uso local e a uma instância pequena; alta concorrência e múltiplas réplicas pedem outro provider relacional.
 - O shell público pode funcionar offline, mas a área privada exige rede por decisão de segurança e consistência antisspoiler.
 - A curadoria continua responsável por escrever nome, resumo e imagem seguros no primeiro ponto de conhecimento. A aplicação valida a ordem estrutural, não o significado do texto.

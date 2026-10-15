@@ -2,7 +2,7 @@
 
 > **Remember the story. Not the spoilers.**
 
-Mnemora é um companion de leitura mobile-first para recordar personagens, lugares, facções, relações e acontecimentos sem ultrapassar o ponto atual do leitor. A aplicação também oferece biblioteca pessoal com gestão de status e remoção segura, busca de livros por título, autor ou ISBN, cadastro manual, progresso por unidade de leitura que pode ser limpo, notas privadas, revisão curta de entidades conhecidas, solicitação de memory packs e uma área administrativa com fluxo editorial de preparação, importação/exportação JSON e publicação.
+Mnemora é um companion de leitura mobile-first para recordar personagens, lugares, facções, relações e acontecimentos sem ultrapassar o ponto atual do leitor. A aplicação também oferece biblioteca pessoal com gestão de status e remoção segura, busca de livros por título, autor ou ISBN, cadastro manual, progresso por unidade de leitura que pode ser limpo, notas privadas, revisão curta de entidades conhecidas, solicitação de memory packs e uma área administrativa com preparação, geração assistida por IA, importação/exportação JSON e publicação.
 
 O projeto é uma PWA em português (`pt-BR`) e usa um universo fictício original no conteúdo demonstrativo.
 
@@ -256,6 +256,7 @@ Todos os endpoints vivem sob `/api`. Rotas de escrita exigem `X-CSRF-TOKEN`; as 
 | Notas | `GET/POST /api/books/{bookId}/notes`, `PUT/DELETE /api/notes/{noteId}` |
 | Revisão | `GET /api/books/{bookId}/review`, `POST /api/books/{bookId}/review/{entityId}` |
 | Administração | `/api/admin/books`, workflow `/memory-pack/*` incluindo `GET /export`, `POST /validate` e `POST /import`, consulta/importação de `/reading-outline/*`, unidades, entidades, aliases, fatos, relações e previews seguros |
+| Geração assistida (Admin) | `/api/admin/books/{bookId}/memory-pack/generations`: disponibilidade, separação das fontes, criação de sessão, progresso, avanço, resultado e cancelamento |
 
 O formulário do livro grava `status`, `currentReadingUnitId` e `currentPage` em uma única chamada a `PATCH /api/library/{bookId}/progress`. Campos ausentes preservam o valor atual; `null` explícito limpa unidade ou página, e todos os valores são validados antes de qualquer mutação. Um status explícito prevalece sobre a inferência automática de `Reading`. Selecionar “Nenhuma — limpar ponto de leitura” restaura o escopo sem progresso e revoga imediatamente o lore anteriormente visível; marcar `Finished` nunca concede conhecimento por conta própria.
 
@@ -283,17 +284,26 @@ O Admin pode baixar um modelo JSON ligado à edição, preenchê-lo com unidades
 
 Confira o [formato v1 e seu fluxo](docs/memory-pack-format.md), os limites e o [exemplo original As Cartas do Farol](docs/examples/memory-pack-v1.json). Depois da importação, revise a prévia em vários pontos de leitura e publique índice e lore separadamente. A exportação contém conhecimento completo para o Admin; as telas do leitor continuam recebendo somente conteúdo já revelado.
 
+### Gerar um pacote com IA
+
+No detalhe administrativo de um **livro compartilhado sem conteúdo editorial e sem publicação**, use **Gerar pacote com IA**. Cole resumos com cabeçalhos consecutivos `## Capítulo 1 — Título`, confira a edição e o índice e informe a atribuição. A geração processa cada capítulo em ordem e entrega o JSON v1 com um relatório separado de evidências. Revise candidatos, citações e revelações antes de enviar o documento à validação e importação atuais; ele sempre entra em rascunho. Capítulos sem resumo e índice não confirmado tornam o resultado parcial e exigem reconhecimento explícito.
+
+O recurso permanece **desabilitado por padrão**. Para habilitar, configure exclusivamente no backend `MemoryPackGeneration__Enabled=true`, `MemoryPackGeneration__Provider=Groq`, `MemoryPackGeneration__Model=openai/gpt-oss-120b` e `MemoryPackGeneration__ApiKey` como segredo. Confirme a organização no Groq Free antes de ativar: o aplicativo não verifica faturamento nem oferece fallback pago. Não coloque a chave no frontend ou no Git. A API .NET não lê arquivos `.env` automaticamente.
+
+As fontes são enviadas ao Groq. Sessões ficam somente na memória do backend e desaparecem em reinícios ou expiração; baixe os dois artefatos durante a revisão. Uma unidade já cadastrada, mesmo em rascunho, impede a geração neste MVP. Leia o [guia de configuração, uso e limites](docs/assisted-generation.md) e use as [fontes fictícias originais](docs/examples/generation-sources.txt) para uma avaliação controlada.
+
 ## Limitações do MVP
 
 - recuperação de senha ainda apresenta apenas uma orientação na interface;
 - livros importados permitem organizar status, página e notas e podem receber um índice da Open Library quando a edição oferece sumário, mas o lore continua dependendo de curadoria e publicação administrativas;
 - livros cadastrados manualmente são privados, não entram na fila de solicitações e não ganham um pack automaticamente;
-- a busca é textual; busca semântica e recursos de IA não fazem parte desta versão;
+- a busca do leitor é textual; busca semântica e respostas por IA ao leitor não fazem parte desta versão;
 - a revisão registra “Eu lembro” ou “Preciso revisar”, sem agendamento por repetição espaçada;
 - SQLite atende ao uso local e a uma implantação simples, sem a estratégia operacional de um banco multi-instância;
 - o modo offline cobre somente o shell público e assets estáticos, não biblioteca, notas, Admin ou outras respostas privadas;
 - cada usuário pode manter até 200 notas por livro, e o histórico de revisão conserva as 500 atividades mais recentes por usuário e livro;
-- o conteúdo de lore e seus pontos de revelação são curados pelo Admin, com autoria manual ou importação de um pacote revisado; o formato v1 não substitui nem mescla conteúdo existente diferente.
+- o conteúdo de lore e seus pontos de revelação são curados pelo Admin, com autoria manual, geração assistida sobre fontes fornecidas ou importação de um pacote revisado; o formato v1 não substitui nem mescla conteúdo existente diferente;
+- a geração assistida não busca resumos na internet, não lê PDF/EPUB e não comprova semanticamente a veracidade nem a ausência de spoilers nas fontes; sessões temporárias e quotas podem interromper livros longos.
 
 As evoluções candidatas estão registradas em [future.md](future.md).
 
@@ -305,6 +315,7 @@ As evoluções candidatas estão registradas em [future.md](future.md).
 - [Motor antisspoiler](docs/spoiler-system.md)
 - [Guia de desenvolvimento](docs/development.md)
 - [Formato de pacote editorial JSON v1](docs/memory-pack-format.md)
+- [Geração assistida: operação e limites](docs/assisted-generation.md)
 - [Segurança de dependências](docs/dependency-security.md)
 - [Implantação no Render](docs/deployment.md)
 - [Arquitetura técnica](docs/technical-architecture.md)

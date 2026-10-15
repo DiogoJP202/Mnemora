@@ -2,7 +2,7 @@ export type AuthUser = { id: string; email: string; isAdmin: boolean };
 type RequestOptions = { signal?: AbortSignal };
 
 export async function apiGet<T>(path: string, options: RequestOptions = {}): Promise<T> {
-  const response = await fetch(path, { credentials: "same-origin", cache: "no-store", signal: options.signal });
+  const response = await request(path, { credentials: "same-origin", cache: "no-store", signal: options.signal });
   if (!response.ok) throw await responseError(response);
   return response.json() as Promise<T>;
 }
@@ -38,7 +38,7 @@ async function apiWriteBody<T>(
   options: RequestOptions,
 ): Promise<T> {
   const csrf = await apiGet<{ token: string }>("/api/auth/csrf", options);
-  const response = await fetch(path, {
+  const response = await request(path, {
     method,
     credentials: "same-origin",
     cache: "no-store",
@@ -51,6 +51,15 @@ async function apiWriteBody<T>(
   });
   if (!response.ok) throw await responseError(response);
   return response.status === 204 ? (undefined as T) : ((await response.json()) as T);
+}
+
+async function request(path: string, options: RequestInit): Promise<Response> {
+  try { return await fetch(path, options); }
+  catch (cause) {
+    if (cause instanceof TypeError)
+      throw new Error("Não foi possível conectar ao servidor. Confira sua conexão e tente novamente.");
+    throw cause;
+  }
 }
 
 function record(value: unknown): Record<string, unknown> {

@@ -39,6 +39,13 @@ Cada fase termina com validações pertinentes, inspeção do diff e de segredos
 | 15 | Gestão completa da estante: status em todos os livros, atualização atômica, limpeza do ponto, metadados persistidos e remoção segura | Atomicidade e isolamento, build/lint e jornada desktop/360 px |
 | 16 | Workflow editorial de memory packs, índice independente, solicitações do leitor e importação opcional de sumário da Open Library | Estados de publicação, ausência de vazamento por rascunho, idempotência, autorização, migration de upgrade, builds e jornada desktop/360 px |
 | 17 | Importação e exportação de pacotes editoriais JSON v1 completos, modelo por edição e validação sem gravação | Contrato estrito, referências e fronteiras de revelação, atomicidade, idempotência, conflito sem substituição, autorização e jornada Admin |
+| 18 | Contratos da geração assistida e separação das fontes por capítulo | Edição do servidor, índice confirmado, lacunas e limites, alvo compartilhado vazio |
+| 19 | Provedor Groq e montagem incremental com evidências | Schema estrito, prefixo conhecido, apresentações congeladas e equivalência das projeções |
+| 20 | Sessões temporárias e API administrativa | Admin/CSRF, posse, revisões, idempotência, concorrência, quotas e cancelamento |
+| 21 | Jornada de geração e transferência no Admin | Fontes em lote, progresso, revisão, downloads, parcial confirmado e importação em rascunho |
+| 22 | Regressões, avaliação controlada e documentação | Suíte completa, auditorias, jornada pela origem Next.js, CI sem API real e ausência de migration |
+
+As fases 18 a 22 seguem o [plano de geração assistida](assisted-generation-plan.md). A operação entregue está descrita em [assisted-generation.md](assisted-generation.md).
 
 ### Aceite da fase 16
 
@@ -67,7 +74,7 @@ Cada fase termina com validações pertinentes, inspeção do diff e de segredos
 - Livros importados sem pack de lore permanecem na biblioteca com estado apropriado e podem receber um índice publicado antes do conhecimento.
 - Sumários externos são apenas uma ajuda para criar unidades: a disponibilidade varia por edição, e personagens, facções, relações, eventos e pontos de revelação continuam sob curadoria humana.
 - Um arquivo JSON completo transporta conteúdo curado; não busca nem inventa lore. O pacote precisa corresponder à edição, e limites estruturais não substituem a revisão da segurança dos nomes, resumos, imagens, pistas e rótulos.
-- Recuperação de senha, IA, busca semântica e repetição espaçada ficam para versões futuras. A revisão MVP registra feedback sem algoritmo de agendamento.
+- Recuperação de senha, respostas por IA ao leitor, busca semântica e repetição espaçada ficam para versões futuras. A geração editorial assistida é opcional e depende de fontes e revisão do Admin. A revisão MVP registra feedback sem algoritmo de agendamento.
 - Um Admin de desenvolvimento é criado apenas por seed explícito com credenciais fornecidas em variáveis de ambiente; nenhum segredo é versionado.
 - O `origin` configurado é o repositório do projeto. O trabalho prossegue na branch `main`, vazia no início.
 - Limpar o ponto de leitura revoga o lore, mas mantém o livro e suas memórias pessoais; remover o livro é definitivo para progresso, notas e histórico de revisão daquela conta e exige confirmação explícita.

@@ -28,11 +28,12 @@ flowchart LR
     Infra --> Db[(SQLite / EF Core 10)]
     Infra -. padrão sem chave .-> OpenLibrary[Open Library]
     Infra -. chave opcional .-> Google[Google Books]
+    Infra -. geração editorial opcional .-> Groq[Groq GPT-OSS 120B]
 ```
 
 O produto é um monólito modular com dois processos no desenvolvimento local. O Next.js atende `http://localhost:3000`; o ASP.NET Core atende `http://localhost:5100`. O rewrite de `/api/:path*` mantém as chamadas do navegador na origem do frontend, inclusive cookies e antiforgery. Em uma implantação, o mesmo contrato exige que o proxy preserve `/api` na mesma origem pública.
 
-Não há cache distribuído, fila ou serviço de IA. O estado persistente fica no SQLite. A Open Library é o provider externo padrão e funciona sem chave; o Google Books é uma fonte adicional quando `GOOGLE_BOOKS_API_KEY` está configurada. Ambos fornecem metadados bibliográficos; uma edição exata da Open Library também pode oferecer um sumário opcional para revisão administrativa. Um `IMemoryCache` local guarda por quatro horas apenas respostas públicas de pesquisa dos providers; dados de usuário continuam fora de qualquer cache compartilhado ou da PWA.
+Não há cache distribuído nem fila durável. O estado persistente fica no SQLite. A Open Library é o provider externo padrão e funciona sem chave; o Google Books é uma fonte adicional quando `GOOGLE_BOOKS_API_KEY` está configurada. Ambos fornecem metadados bibliográficos; uma edição exata da Open Library também pode oferecer um sumário opcional para revisão administrativa. Um `IMemoryCache` local guarda por quatro horas apenas respostas públicas de pesquisa dos providers; dados de usuário continuam fora de qualquer cache compartilhado ou da PWA. O serviço opcional de geração editorial usa Groq e armazenamento temporário próprio de sessões, sem persistir fontes no banco.
 
 ## Organização do repositório e dependências
 
@@ -188,4 +189,12 @@ Os prefixos `/api`, `/app` e `/admin` saem imediatamente do handler sem consulta
 - A remoção por livro limpa a memória pessoal associada àquela estante. Ela não substitui encerramento de conta, portabilidade nem uma política global de retenção de dados.
 - A segurança antisspoiler depende da curadoria de `ShortDescription` e `ImageUrl` para o primeiro ponto de conhecimento e da marcação correta de cada revelação. As validações impedem inconsistência temporal estrutural, mas não avaliam semanticamente o texto escrito por um Admin.
 - A PWA oferece o shell público offline. A área autenticada exige rede de propósito, para que progresso retrocedido e dados privados nunca sejam servidos de um cache local antigo.
-- Recuperação de senha, busca semântica, geração por IA e repetição espaçada são extensões futuras e não fazem parte deste MVP.
+- Recuperação de senha, busca semântica, respostas por IA ao leitor e repetição espaçada são extensões futuras. A [geração editorial assistida](assisted-generation.md) está disponível opcionalmente para livros compartilhados vazios, com revisão humana antes de importar e publicar.
+
+## Geração editorial assistida
+
+`AdminMemoryPackGenerationEndpoints` exige Admin e antiforgery nas escritas. `MemoryPackGenerationTarget` confere a identidade exportada pelo servidor e o alvo vazio antes de iniciar, avançar e entregar resultados. O serviço usa sessões do `MemoryPackGenerationSessionStore`, singleton limitado a uma sessão por Admin, duas globais e uma chamada de IA simultânea. A revisão e o cursor são do backend; `operationId` e `expectedRevision` protegem repetição e concorrência. Um livro preenchido ou publicado durante a geração passa a gerar conflito.
+
+O `GroqMemoryPackGenerationProvider` envia somente a fonte corrente e entidades/aliases do prefixo conhecido ao endpoint fixo do modelo GPT-OSS 120B. Schema estrito limita a estrutura; `MemoryPackGenerationAssembler` confere evidências textuais e acrescenta candidatos sem reescrever apresentações. Documento v1 e relatório têm limites/hash independentes, sem uma consolidação global por IA. A política de leitura existente permanece intacta.
+
+Nenhuma transação SQLite fica aberta durante a chamada ao provedor. Não há migration, job persistente ou publicação automática. A transferência existente valida novamente e importa em `Draft`. A API não garante que a conta do provedor seja gratuita; o operador confirma Groq Free antes da habilitação, sem fallback pago. Chave e opções ficam no backend. O Next.js encaminha as chamadas com timeout de proxy de 120 segundos. O [guia operacional](assisted-generation.md) detalha os contratos, limites, cancelamento, perda em reinício e testes sem API real.

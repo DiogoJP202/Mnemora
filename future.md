@@ -24,10 +24,17 @@ A avaliação precisa incluir ataques com termos futuros, aliases ainda bloquead
 
 ## Assistência por IA
 
-- sugerir resumos e pistas para revisão do Admin, sempre com aprovação humana;
-- auxiliar na classificação de entidades, relações e possíveis unidades de revelação;
+O Admin já pode gerar um [pacote JSON v1 com evidências](docs/assisted-generation.md) a partir de resumos fornecidos por capítulo, usando Groq e revisão humana. O backend atribui os pontos de revelação e preserva as apresentações iniciais. A funcionalidade é opcional, desabilitada por padrão e restrita a livros compartilhados sem conteúdo editorial. A geração não publica nem responde ao leitor.
+
+Evoluções fora desse fluxo inicial:
+
+- persistir sessões e permitir retomada após reinício, com retenção e exclusão explícitas;
+- avaliar outro provedor ou um modelo local, sem fallback pago automático;
+- oferecer extração autorizada de PDF/EPUB e índices hierárquicos na entrada assistida;
+- acrescentar auditoria semântica e avaliação editorial de candidatos, sem tratá-las como prova de ausência de spoilers;
+- representar identidades condicionadas ao progresso e fatos substituídos em uma futura versão de contrato;
 - responder perguntas do leitor somente a partir de um conjunto de fatos já autorizado;
-- registrar versão, origem e revisão editorial do conteúdo gerado;
+- manter histórico durável de versões, evidências e revisões do conteúdo gerado;
 - medir alucinações e vazamentos antes de habilitar qualquer resposta ao leitor.
 
 Textos completos protegidos por direitos autorais não devem ser enviados ou armazenados sem autorização. Metadados externos continuam separados do lore seguro, e uma resposta gerada nunca deve completar lacunas com conhecimento fora do escopo liberado.

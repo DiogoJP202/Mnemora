@@ -55,6 +55,12 @@ Com os preços atuais do Render, essa configuração custa cerca de **US$ 7,25 p
 
 SQLite com disco persistente exige uma única instância e não oferece failover. Para escalar horizontalmente, migre o `MnemoraDbContext` para um banco gerenciado, remova a dependência do arquivo local e valide novamente migrations, concorrência e proteção de dados.
 
+## Geração assistida opcional
+
+O Blueprint mantém a geração desabilitada por padrão. Para ativar no serviço existente, confirme Groq Free e seus controles de retenção e configure os secrets/opções `MemoryPackGeneration__*` conforme o [guia operacional](assisted-generation.md). A chave é do backend, sem prefixo `NEXT_PUBLIC_`. O código não verifica faturamento da organização e não tem fallback pago. Não habilite com uma conta paga quando o orçamento autorizado for zero.
+
+As sessões de geração e seus contadores são somente em memória, mesmo com disco persistente. Deploys, repousos e reinícios perdem esse trabalho; preserve JSON e relatório por download. A coordenação atual exige uma única instância. O proxy Next.js tem timeout de 120 segundos para acomodar os 90 segundos do provedor.
+
 ## Atualizar ou remover
 
 Para atualizar, envie um commit aprovado para `main` ou escolha **Manual Deploy** no Dashboard. No plano gratuito, qualquer deploy pode recriar o banco do zero. Para remover a demonstração, exclua o Web Service no Dashboard; não há dados persistentes a preservar.

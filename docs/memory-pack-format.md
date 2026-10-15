@@ -114,3 +114,7 @@ Para experimentar, crie no Admin um livro compartilhado vazio com o título **As
 | Retrocesso ao capítulo 1 | Facção, fato do selo, relações, alias e evento posterior voltam a ficar ocultos |
 
 A tela administrativa pode exibir o conteúdo completo para autoria e revisão. Essa tabela descreve o que o leitor recebe das rotas seguras após a publicação; não significa que o JSON completo possa ser enviado às telas de leitura.
+
+## Geração assistida opcional
+
+O Admin pode produzir este mesmo JSON v1 usando [resumos fornecidos por capítulo](assisted-generation.md). A funcionalidade exige livro compartilhado vazio, configuração do Groq no backend e revisão humana. Evidências, cobertura, diagnósticos e hash ficam em um relatório separado: não adicione esses campos ao documento de importação. O fluxo atual de validação, idempotência, conflito e importação em rascunho permanece responsável pela gravação. Editar o JSON invalida a correspondência automática com o relatório original.
