@@ -60,6 +60,9 @@ public sealed class MemoryPackGenerationService(
         var receipt = store.ResolveReceipt(ownerId, bookId, runId, request);
         if (receipt is not null) return receipt;
         var snapshot = store.Snapshot(ownerId, bookId, runId);
+        if (request.ExpectedRevision != snapshot.Status.Revision)
+            throw new GenerationException("revision_conflict",
+                "A sessão mudou. Consulte o progresso antes de continuar.", 409);
         if (snapshot.CurrentSource is null)
             throw new GenerationException("generation_finished", "Todas as unidades já foram processadas.", 409);
         await CheckTargetAsync(ownerId, bookId, runId, snapshot.Document.Book, cancellationToken);

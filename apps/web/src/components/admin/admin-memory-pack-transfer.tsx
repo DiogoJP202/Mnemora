@@ -1,8 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { apiGet, apiWriteJsonDocument, ApiResponseError } from "@/lib/api";
-import type { AdminBook, MemoryPackImportResult, MemoryPackValidation } from "@/lib/admin-types";
+import { apiGet, apiWriteJsonDocument, ApiResponseError, downloadJson } from "@/lib/api";
+import type { AdminBook, GeneratedMemoryPackSelection, MemoryPackImportResult, MemoryPackValidation } from "@/lib/admin-types";
 
 const MAX_FILE_BYTES = 2 * 1024 * 1024;
 const countLabels = {
@@ -10,13 +10,17 @@ const countLabels = {
   facts: "Fatos", relations: "Relações", events: "Eventos",
 } as const;
 
-type Selection = { fileName: string; json: string; book: Record<string, unknown> };
+type Selection = {
+  fileName: string; json: string; book: Record<string, unknown>;
+  originalJson?: string; isPartial: boolean; reportHash?: string;
+};
 type Props = {
   book: AdminBook;
   disabled: boolean;
   disabledReason?: string;
   onWorkingChange: (working: boolean) => void;
   onImported: () => Promise<void>;
+  generatedSelection?: GeneratedMemoryPackSelection | null;
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -28,6 +32,11 @@ function display(value: unknown): string {
   return typeof value === "string" && value.trim()
     ? value.length > 250 ? `${value.slice(0, 250)}…` : value
     : "Não informado";
+}
+
+function bookFromJson(json: string): Record<string, unknown> {
+  try { return record(record(JSON.parse(json)).book); }
+  catch { return {}; }
 }
 
 function errorValidation(cause: unknown): MemoryPackValidation | null {
@@ -44,16 +53,25 @@ function errorValidation(cause: unknown): MemoryPackValidation | null {
   return payload as MemoryPackValidation;
 }
 
-export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWorkingChange, onImported }: Props) {
-  const [selection, setSelection] = useState<Selection | null>(null);
+export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWorkingChange, onImported, generatedSelection }: Props) {
+  const [selection, setSelection] = useState<Selection | null>(() => generatedSelection ? {
+    fileName: `mnemora-${book.id}-gerado-v1.json`, json: generatedSelection.json,
+    originalJson: generatedSelection.originalJson, isPartial: generatedSelection.isPartial,
+    reportHash: generatedSelection.reportHash, book: bookFromJson(generatedSelection.json),
+  } : null);
   const [validation, setValidation] = useState<MemoryPackValidation | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [reviewed, setReviewed] = useState(generatedSelection?.reviewed ?? false);
+  const [partialAcknowledged, setPartialAcknowledged] = useState(generatedSelection?.partialAcknowledged ?? false);
   const [working, setWorking] = useState<"read" | "validate" | "import" | "export" | null>(null);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const reportHeading = useRef<HTMLHeadingElement>(null);
   const isBusy = disabled || working !== null;
   const hasContent = book.unitCount > 0 || book.entityCount > 0;
+  const isGenerated = selection?.originalJson !== undefined;
+  const reviewReady = !isGenerated || reviewed && (!selection?.isPartial || partialAcknowledged);
+  const edited = isGenerated && selection?.json !== selection?.originalJson;
 
   function start(action: NonNullable<typeof working>) {
     setWorking(action);
@@ -71,6 +89,8 @@ export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWork
     setSelection(null);
     setValidation(null);
     setConfirmed(false);
+    setReviewed(false);
+    setPartialAcknowledged(false);
     setError("");
     setSuccess("");
     if (!file) return;
@@ -82,7 +102,7 @@ export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWork
     try {
       const json = await file.text();
       const payload: unknown = JSON.parse(json);
-      setSelection({ fileName: file.name, json, book: record(record(payload).book) });
+      setSelection({ fileName: file.name, json, book: record(record(payload).book), isPartial: false });
     } catch {
       setError("Não foi possível ler o JSON. Confira a sintaxe e selecione o arquivo corrigido.");
     } finally {
@@ -91,7 +111,11 @@ export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWork
   }
 
   async function validate() {
-    if (!selection) return;
+    if (!selection || !reviewReady) return;
+    if (new TextEncoder().encode(selection.json).byteLength > MAX_FILE_BYTES) {
+      setError("O JSON ultrapassa o limite de 2 MiB. Revise o tamanho antes de validar.");
+      return;
+    }
     start("validate");
     setValidation(null);
     setConfirmed(false);
@@ -113,7 +137,7 @@ export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWork
   }
 
   async function importPack() {
-    if (!selection || !validation?.isValid || !confirmed) return;
+    if (!selection || !validation?.isValid || !confirmed || !reviewReady) return;
     start("import");
     try {
       const result = await apiWriteJsonDocument<MemoryPackImportResult>(
@@ -139,14 +163,7 @@ export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWork
     start("export");
     try {
       const document = await apiGet<unknown>(`/api/admin/books/${book.id}/memory-pack/export`);
-      const url = URL.createObjectURL(new Blob([JSON.stringify(document, null, 2)], { type: "application/json" }));
-      const anchor = window.document.createElement("a");
-      anchor.href = url;
-      anchor.download = `mnemora-${book.id}-pack-v1.json`;
-      window.document.body.append(anchor);
-      anchor.click();
-      anchor.remove();
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      downloadJson(`mnemora-${book.id}-pack-v1.json`, JSON.stringify(document, null, 2));
       setSuccess(hasContent
         ? "Exportação preparada. O arquivo contém o conteúdo editorial completo, inclusive revelações futuras."
         : "Modelo preparado com a identidade desta edição. Preencha as unidades e o conhecimento antes de validar.");
@@ -155,6 +172,17 @@ export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWork
     } finally {
       finish();
     }
+  }
+
+  function editJson(json: string) {
+    if (!selection) return;
+    setSelection({ ...selection, json, book: bookFromJson(json) });
+    setValidation(null);
+    setConfirmed(false);
+    setReviewed(false);
+    setPartialAcknowledged(false);
+    setError("");
+    setSuccess("");
   }
 
   return (
@@ -190,7 +218,10 @@ export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWork
 
       {selection && (
         <div className="admin-pack-file mt-5 rounded-xl border p-4">
-          <p className="text-sm font-semibold">{selection.fileName}</p>
+          <h3 className="break-words text-sm font-semibold">{selection.fileName}</h3>
+          {isGenerated && <p className="mt-2 break-all text-xs text-[var(--ink-soft)]">Relatório original vinculado ao hash {selection.reportHash}.</p>}
+          {selection.isPartial && <p className="mt-3 rounded-lg border border-[var(--line)] bg-[var(--surface-tint)] p-3 text-sm">Resultado parcial. Confira os capítulos sem fontes, falhas e evidências antes de importar.</p>}
+          {edited && <p role="status" className="mt-3 rounded-lg border border-[var(--line)] p-3 text-sm">O JSON foi editado. O relatório e seu hash continuam ligados à versão originalmente gerada; as evidências podem não corresponder às alterações. Revise novamente e valide este texto.</p>}
           <dl className="admin-edition-grid mt-3">
             <div><dt>Livro do arquivo</dt><dd>{display(selection.book.title)}</dd></div>
             <div><dt>Autor</dt><dd>{display(selection.book.author)}</dd></div>
@@ -199,9 +230,20 @@ export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWork
             <div><dt>ID externo</dt><dd>{display(selection.book.externalId)}</dd></div>
             <div><dt>Idioma</dt><dd>{display(selection.book.language)}</dd></div>
           </dl>
-          <button type="button" disabled={isBusy} onClick={() => void validate()} className="mt-4 rounded-lg border px-4 py-2 disabled:opacity-50">
+          <details className="mt-4 min-w-0">
+            <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">Editar JSON (opcional)</summary>
+            <label htmlFor="pack-json" className="mt-2 block text-sm">JSON para validação e importação</label>
+            <textarea id="pack-json" rows={12} spellCheck={false} disabled={isBusy} value={selection.json} onChange={(event) => editJson(event.target.value)} aria-describedby="pack-json-help" className="mt-2 w-full min-w-0 max-w-full rounded-lg border p-3 font-mono text-xs" />
+            <p id="pack-json-help" className="mt-2 text-xs text-[var(--ink-soft)]">Qualquer edição invalida a validação e as confirmações anteriores. O relatório original permanece disponível na geração acima.</p>
+          </details>
+          {isGenerated && <div className="mt-4 grid gap-3">
+            <label className="flex min-h-11 items-start gap-3 text-sm"><input type="checkbox" disabled={isBusy} checked={reviewed} onChange={(event) => setReviewed(event.target.checked)} className="mt-1 shrink-0" /><span>Revisei este JSON, suas evidências e os pontos de revelação, incluindo as alterações feitas.</span></label>
+            {selection.isPartial && <label className="flex min-h-11 items-start gap-3 text-sm"><input type="checkbox" disabled={isBusy} checked={partialAcknowledged} onChange={(event) => setPartialAcknowledged(event.target.checked)} className="mt-1 shrink-0" /><span>Reconheço que o pacote é parcial e conferi suas lacunas antes de validar e importar.</span></label>}
+          </div>}
+          <button type="button" disabled={isBusy || !reviewReady} onClick={() => void validate()} className="mt-4 min-h-11 rounded-lg border px-4 py-2 disabled:opacity-50">
             {working === "validate" ? "Validando…" : "Validar arquivo"}
           </button>
+          <button type="button" disabled={isBusy} onClick={() => downloadJson(selection.fileName, selection.json)} className="mt-4 ml-2 min-h-11 rounded-lg border px-4 py-2 disabled:opacity-50">{edited ? "Baixar JSON revisado" : "Baixar JSON selecionado"}</button>
         </div>
       )}
 
@@ -227,11 +269,11 @@ export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWork
           )}
           {validation.isValid && (
             <div className="mt-5 grid gap-4">
-              <label className="flex items-start gap-3 text-sm">
+              <label className="flex min-h-11 items-start gap-3 text-sm">
                 <input type="checkbox" checked={confirmed} disabled={isBusy} onChange={(event) => setConfirmed(event.target.checked)} className="mt-1 shrink-0" />
                 <span>Conferi que o pacote pertence a <strong>{book.title}</strong>, de {book.author}, e que os capítulos correspondem a esta edição. A revisão do texto e dos pontos de revelação continuará no preview.</span>
               </label>
-              <button type="button" disabled={isBusy || !confirmed} onClick={() => void importPack()} className="justify-self-start rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)] disabled:opacity-50">
+              <button type="button" disabled={isBusy || !confirmed || !reviewReady} onClick={() => void importPack()} className="min-h-11 justify-self-start rounded-lg bg-[var(--action-surface)] px-4 py-2 text-[var(--action-text)] disabled:opacity-50">
                 {working === "import" ? "Importando…" : validation.alreadyImported ? "Confirmar pacote existente" : "Importar como rascunho"}
               </button>
             </div>
@@ -239,7 +281,7 @@ export function AdminMemoryPackTransfer({ book, disabled, disabledReason, onWork
         </div>
       )}
 
-      {error && <p role="alert" className="form-alert mt-4">{error}</p>}
+      {error && <p role="alert" className="form-alert mt-4 rounded-lg border p-3 text-sm">{error}</p>}
       {success && <p role="status" className="mt-4 text-sm">{success}</p>}
     </section>
   );

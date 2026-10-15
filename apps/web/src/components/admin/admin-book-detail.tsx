@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { apiGet, apiWrite } from "@/lib/api";
-import type { AdminBook, AdminUnit } from "@/lib/admin-types";
+import type { AdminBook, AdminUnit, GeneratedMemoryPackSelection } from "@/lib/admin-types";
 import { AdminMemoryPackTransfer } from "@/components/admin/admin-memory-pack-transfer";
+import { AdminMemoryPackGeneration } from "@/components/admin/admin-memory-pack-generation";
 
 type Preview = { entities: { id: string; name: string }[]; timeline: unknown[] };
 type Action = "prepare" | "publish-outline" | "publish-lore" | "unpublish-lore" | "unpublish-outline";
@@ -27,6 +28,8 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [transferBusy, setTransferBusy] = useState(false);
+  const [generationBusy, setGenerationBusy] = useState(false);
+  const [generatedSelection, setGeneratedSelection] = useState<GeneratedMemoryPackSelection | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -36,6 +39,7 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
     ]).then(([result, resultUnits]) => {
       if (cancelled) return;
       setBook(result);
+      setGeneratedSelection(null);
       setSavedBook(result);
       setUnits(resultUnits);
       setPreviewUnit(resultUnits[0]?.id || "");
@@ -113,7 +117,7 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
   }
 
   if (!book || book.id !== bookId) return error ? <p role="alert">{error}</p> : <p>Carregando livro…</p>;
-  const isBusy = busy !== null || transferBusy;
+  const isBusy = busy !== null || transferBusy || generationBusy;
   const hasUnsavedMetadata = Boolean(savedBook && (
     savedBook.title !== book.title || savedBook.author !== book.author
     || savedBook.description !== book.description || savedBook.coverUrl !== book.coverUrl
@@ -157,8 +161,8 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
         </Link>
       </nav>
 
-      {error && <p role="alert" className="mt-5 rounded-lg bg-red-50 p-3 text-red-800">{error}</p>}
-      {success && <p role="status" className="mt-5 rounded-lg bg-green-50 p-3 text-green-800">{success}</p>}
+      {error && <p role="alert" className="form-alert mt-5 rounded-lg border p-3">{error}</p>}
+      {success && <p role="status" className="form-success mt-5 rounded-lg border p-3">{success}</p>}
 
       <section className="admin-workflow mt-8 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5" aria-labelledby="workflow-title">
         <div className="flex flex-wrap items-start justify-between gap-4">
@@ -218,13 +222,23 @@ export function AdminBookDetail({ bookId }: { bookId: string }) {
         </section>
       )}
 
-      <AdminMemoryPackTransfer
-        key={`${bookId}:${savedBook?.title}:${savedBook?.author}`}
+      <AdminMemoryPackGeneration
+        key={bookId}
         book={savedBook ?? book}
-        disabled={busy !== null || hasUnsavedMetadata}
+        disabled={busy !== null || transferBusy || hasUnsavedMetadata}
+        disabledReason={hasUnsavedMetadata ? "Salve os metadados antes de iniciar ou continuar uma geração." : undefined}
+        onWorkingChange={setGenerationBusy}
+        onGenerated={setGeneratedSelection}
+      />
+
+      <AdminMemoryPackTransfer
+        key={`${bookId}:${savedBook?.title}:${savedBook?.author}:${generatedSelection?.id ?? "file"}`}
+        book={savedBook ?? book}
+        disabled={busy !== null || generationBusy || hasUnsavedMetadata}
         disabledReason={hasUnsavedMetadata ? "Salve os metadados antes de importar ou exportar um pacote." : undefined}
         onWorkingChange={setTransferBusy}
         onImported={refreshContent}
+        generatedSelection={generatedSelection}
       />
 
       <form onSubmit={save} className="mt-8 grid max-w-4xl gap-4 rounded-2xl border bg-[var(--surface)] p-5">

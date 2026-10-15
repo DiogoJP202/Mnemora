@@ -6,6 +6,8 @@ const scriptPolicy = process.env.NODE_ENV === "development"
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  // A generation step may use the backend's full 90-second provider timeout.
+  experimental: { proxyTimeout: 120_000 },
   async headers() {
     return [
       {

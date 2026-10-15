@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Data.Common;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -9,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Mnemora.Application;
@@ -183,6 +185,62 @@ public sealed class MemoryPackGenerationEndpointTests
         Assert.Equal(HttpStatusCode.Conflict, staleResponse.StatusCode);
         Assert.Equal(1, fixture.Provider.Calls);
         Assert.Equal(1, (await fixture.StatusAsync(runId))["completedUnits"]!.GetValue<int>());
+    }
+
+    [Fact]
+    public async Task Predicted_revision_cannot_bind_a_stale_source_after_another_step_finishes()
+    {
+        var pause = new PauseBooksRead();
+        using var fixture = await Fixture.CreateAsync(interceptor: pause);
+        var status = await fixture.StartAsync();
+        var runId = RunId(status);
+        fixture.Provider.BlockNext = true;
+        var firstRequest = Write(fixture.Admin, fixture.Path($"{runId}/next"), NextBody(status));
+        try
+        {
+            await fixture.Provider.Started.Task.WaitAsync(TimeSpan.FromSeconds(10));
+            pause.Arm();
+            // This revision does not exist yet. An old implementation captured source 1
+            // before the query, then accepted revision 1 after the first call completed.
+            var secondRequest = Write(fixture.Admin, fixture.Path($"{runId}/next"), new
+            {
+                operationId = Guid.NewGuid(), expectedRevision = status["revision"]!.GetValue<int>() + 1
+            });
+            var winner = await Task.WhenAny(secondRequest, pause.Started.Task).WaitAsync(TimeSpan.FromSeconds(10));
+            HttpResponseMessage secondResponse;
+            HttpResponseMessage firstResponse;
+            if (winner == secondRequest)
+            {
+                secondResponse = await secondRequest;
+                pause.Disarm();
+                fixture.Provider.Release.TrySetResult(true);
+                firstResponse = await firstRequest.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            else
+            {
+                // Regression path: the stale snapshot is held at its book query while
+                // the first operation advances the session to the predicted revision.
+                fixture.Provider.Release.TrySetResult(true);
+                firstResponse = await firstRequest.WaitAsync(TimeSpan.FromSeconds(10));
+                fixture.Clock.Advance(TimeSpan.FromSeconds(61));
+                pause.Release.TrySetResult(true);
+                secondResponse = await secondRequest.WaitAsync(TimeSpan.FromSeconds(10));
+            }
+            Assert.Equal(HttpStatusCode.OK, firstResponse.StatusCode);
+            Assert.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);
+            Assert.Equal(1, fixture.Provider.Calls);
+            var current = await fixture.StatusAsync(runId);
+            Assert.Equal(1, current["revision"]!.GetValue<int>());
+            Assert.Equal(1, current["completedUnits"]!.GetValue<int>());
+            Assert.Equal("Generated", current["coverage"]![0]!["status"]!.GetValue<string>());
+            Assert.Equal("Pending", current["coverage"]![1]!["status"]!.GetValue<string>());
+        }
+        finally
+        {
+            pause.Disarm();
+            pause.Release.TrySetResult(true);
+            fixture.Provider.Release.TrySetResult(true);
+        }
     }
 
     [Fact]
@@ -418,7 +476,7 @@ public sealed class MemoryPackGenerationEndpointTests
             $"/api/admin/books/{bookId ?? BookId}/memory-pack/generations" + (suffix.Length == 0 ? "" : $"/{suffix}");
         public string TransferPath(string suffix) => $"/api/admin/books/{BookId}/memory-pack/{suffix}";
 
-        public static async Task<Fixture> CreateAsync(bool enabled = true)
+        public static async Task<Fixture> CreateAsync(bool enabled = true, IInterceptor? interceptor = null)
         {
             var directory = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"mnemora-generation-{Guid.NewGuid():N}");
             Directory.CreateDirectory(directory);
@@ -433,7 +491,10 @@ public sealed class MemoryPackGenerationEndpointTests
                     services.RemoveAll<DbContextOptions<MnemoraDbContext>>();
                     services.RemoveAll<MnemoraDbContext>();
                     services.AddDbContext<MnemoraDbContext>(options =>
-                        options.UseSqlite($"Data Source={dbFile};Pooling=False"));
+                    {
+                        options.UseSqlite($"Data Source={dbFile};Pooling=False");
+                        if (interceptor is not null) options.AddInterceptors(interceptor);
+                    });
                     services.RemoveAll<IMemoryPackGenerationProvider>();
                     services.AddSingleton<IMemoryPackGenerationProvider>(provider);
                     services.RemoveAll<TimeProvider>();
@@ -581,6 +642,7 @@ public sealed class MemoryPackGenerationEndpointTests
         public int? FailOnCall { get; set; }
         public bool BlockNext { get; set; }
         public TaskCompletionSource<bool> Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public int EstimateInputTokens(ChapterInput input) => 100;
 
         public async Task<ExtractionResult> ExtractAsync(ChapterInput input, CancellationToken cancellationToken)
@@ -590,7 +652,7 @@ public sealed class MemoryPackGenerationEndpointTests
             {
                 BlockNext = false;
                 Started.TrySetResult(true);
-                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                await Release.Task.WaitAsync(cancellationToken);
             }
             if (call == FailOnCall)
                 throw new GenerationException("provider_rate_limited", "Quota fictícia para testar o prefixo.", 429, 60);
@@ -629,5 +691,26 @@ public sealed class MemoryPackGenerationEndpointTests
         }
         private static GenerationEvidence Citation(string paragraph, string quote) =>
             new(paragraph, quote, "Fonte fictícia explícita da unidade atual.");
+    }
+
+    private sealed class PauseBooksRead : DbCommandInterceptor
+    {
+        private int armed;
+        public TaskCompletionSource<bool> Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource<bool> Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public void Arm() => Interlocked.Exchange(ref armed, 1);
+        public void Disarm() => Interlocked.Exchange(ref armed, 0);
+        public override async ValueTask<InterceptionResult<DbDataReader>> ReaderExecutingAsync(DbCommand command,
+            CommandEventData eventData, InterceptionResult<DbDataReader> result,
+            CancellationToken cancellationToken = default)
+        {
+            if (command.CommandText.Contains("FROM \"Books\"", StringComparison.Ordinal)
+                && Interlocked.CompareExchange(ref armed, 0, 1) == 1)
+            {
+                Started.TrySetResult(true);
+                await Release.Task.WaitAsync(cancellationToken);
+            }
+            return result;
+        }
     }
 }

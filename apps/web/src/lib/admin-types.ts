@@ -49,3 +49,34 @@ export type MemoryPackValidation = {
 export type MemoryPackImportResult = {
   alreadyImported: boolean; counts: MemoryPackCounts;
 };
+
+export type GenerationSource = { title: string; summary: string };
+export type GenerationSourceIssue = { path: string; code: string; message: string; severity: string; isBlocking: boolean };
+export type GenerationSourceParseResult = { sources: GenerationSource[]; issues: GenerationSourceIssue[]; isValid: boolean };
+export type GenerationCoverage = { unitSlug: string; title: string; status: "Pending" | "Generated" | "MissingSource" | "Failed"; sourceHash: string };
+export type GenerationSession = {
+  runId: string; bookId: string; revision: number;
+  state: "Ready" | "Processing" | "Paused" | "Completed" | "Cancelled";
+  completedUnits: number; totalUnits: number; calls: number; tokens: number; estimatedTokens: number;
+  nextAllowedAt: string | null; coverage: GenerationCoverage[]; diagnostics: string[]; hasImportableResult: boolean;
+};
+export type GenerationAvailability = {
+  enabled: boolean; reason: string | null; model: string; maxUnits: number; maxSourceBytes: number;
+  minCallIntervalSeconds: number; existingSession: GenerationSession | null;
+};
+export type GenerationEvidence = {
+  unitSlug: string; sourceHash: string; paragraphId: string; quote: string; justification: string; itemId: string; jsonPath: string;
+};
+export type GenerationReport = {
+  provider: string; model: string; promptVersion: string; sourceAttribution: string | null; sourceUrl: string | null;
+  indexComplete: boolean; partial: boolean; packHash: string; calls: number; tokens: number; estimatedTokens: number;
+  units: GenerationCoverage[]; evidence: GenerationEvidence[]; diagnostics: string[];
+};
+export type GenerationResult = {
+  status: GenerationSession; document: Record<string, unknown>; documentJson: string;
+  report: GenerationReport; validation: MemoryPackValidation;
+};
+export type GeneratedMemoryPackSelection = {
+  id: string; json: string; originalJson: string; isPartial: boolean; reportHash: string;
+  reviewed: boolean; partialAcknowledged: boolean;
+};
