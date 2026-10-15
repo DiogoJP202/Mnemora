@@ -96,8 +96,15 @@ public sealed class GroqMemoryPackGenerationProvider(
                     "A quota do provedor foi atingida. Aguarde antes de tentar esta unidade novamente.",
                     429, RetryAfterSeconds(response));
             if (!response.IsSuccessStatusCode)
-                throw new GenerationException("provider_unavailable",
-                    "O provedor não conseguiu concluir a extração desta unidade.", 503);
+                throw response.StatusCode switch
+                {
+                    HttpStatusCode.Unauthorized => new GenerationException("provider_authentication_failed",
+                        "O Groq recusou a chave de API. Confira a chave configurada no backend e reinicie a API.", 503),
+                    HttpStatusCode.Forbidden => new GenerationException("provider_access_denied",
+                        "O Groq negou acesso. Confira as permissões da chave e do modelo na organização.", 503),
+                    _ => new GenerationException("provider_unavailable",
+                        "O provedor não conseguiu concluir a extração desta unidade.", 503)
+                };
 
             using var document = await ReadResponseAsync(response.Content, timeout.Token);
             return ParseResponse(document.RootElement);

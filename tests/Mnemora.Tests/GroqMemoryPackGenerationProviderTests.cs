@@ -287,12 +287,13 @@ public sealed class GroqMemoryPackGenerationProviderTests
     }
 
     [Theory]
-    [InlineData(400)]
-    [InlineData(401)]
-    [InlineData(403)]
-    [InlineData(500)]
-    [InlineData(503)]
-    public async Task Maps_provider_failures_to_503_without_reading_or_exposing_the_body(int status)
+    [InlineData(400, "provider_unavailable", "não conseguiu concluir")]
+    [InlineData(401, "provider_authentication_failed", "chave de API")]
+    [InlineData(403, "provider_access_denied", "permissões da chave")]
+    [InlineData(500, "provider_unavailable", "não conseguiu concluir")]
+    [InlineData(503, "provider_unavailable", "não conseguiu concluir")]
+    public async Task Maps_provider_failures_to_safe_actionable_503_without_reading_the_body(
+        int status, string code, string guidance)
     {
         var handler = Immediate(_ => new HttpResponseMessage((HttpStatusCode)status) { Content = new UnreadableContent() });
         using var client = new HttpClient(handler);
@@ -300,7 +301,8 @@ public sealed class GroqMemoryPackGenerationProviderTests
         var error = await Assert.ThrowsAsync<GenerationException>(() =>
             Provider(client).ExtractAsync(Input(), CancellationToken.None));
 
-        Assert.Equal("provider_unavailable", error.Code);
+        Assert.Equal(code, error.Code);
+        Assert.Contains(guidance, error.Message);
         Assert.Equal(503, error.StatusCode);
         Assert.Null(error.InnerException);
     }
