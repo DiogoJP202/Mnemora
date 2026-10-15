@@ -1,6 +1,6 @@
 # Automação da adição de livros e preparação editorial
 
-Proposta de evolução após as fases 18–22 e o primeiro teste real com Groq. Este documento descreve próximos passos; os recursos abaixo ainda não estão implementados. A prioridade solicitada é reduzir o cadastro manual e a coleta de fontes pelo Admin, aproveitando APIs públicas e pesquisa de fontes antes da organização por IA. O orçamento anterior de API zero continua valendo; não habilitar fornecedores ou fallbacks pagos.
+Evolução após as fases 18–22 e o primeiro teste real com Groq. **A fase 23 está implementada:** busca e importação de edições no Admin, usando o serviço compartilhado com o leitor. As fases 24–28 abaixo continuam propostas; descoberta narrativa, coleta e preparação automática ainda não estão implementadas. A prioridade solicitada é reduzir o cadastro manual e a coleta de fontes pelo Admin, aproveitando APIs públicas e pesquisa de fontes antes da organização por IA. O orçamento anterior de API zero continua valendo; não habilitar fornecedores ou fallbacks pagos.
 
 ## Experiência pretendida
 
@@ -98,4 +98,4 @@ Cada fase mantém a regra do projeto: verificar o que mudou, revisar diff/segred
 | 27 — Preparação integrada | “Adicionar e preparar”, revisão por exceções, rascunho automático e reaproveitamento de pacote publicado | Caminho normal sem colar resumos/exportar JSON; revisão e publicação continuam explícitas; livro preenchido nunca é sobrescrito |
 | 28 — Avaliação e entrega | Livros reais representativos, fontes, qualidade, custo operacional e regressões | Relatório distingue dados encontrados, inferências rejeitadas e lacunas; fronteiras, Recall, timeline, retrocesso e autorização preservados |
 
-Começar pela fase 23, pois reutiliza uma integração funcional e remove o cadastro duplicado no Admin. A avaliação das fontes deve usar os livros reais indicados pelo usuário, contemplando pelo menos um caso com fonte narrativa estruturada e outro com cobertura insuficiente. Ausência de fonte é um resultado esperado e visível, não um motivo para gerar conteúdo sem evidência.
+A fase 23 reutiliza uma integração funcional e remove o cadastro duplicado no Admin. A avaliação inicial prioriza os três primeiros livros de Harry Potter, indicados pelo usuário; os resultados e lacunas estão no [levantamento de fontes](harry-potter-source-assessment.md). A avaliação das próximas fases deve contemplar pelo menos um caso com fonte narrativa estruturada e outro com cobertura insuficiente. Ausência de fonte é um resultado esperado e visível, não um motivo para gerar conteúdo sem evidência.

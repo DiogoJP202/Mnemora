@@ -1,5 +1,7 @@
 namespace Mnemora.Application;
 
+public sealed record ExternalBookImportRequest(string ExternalProvider, string ExternalId);
+
 public sealed record ExternalBookMetadata(
     string Provider, string ExternalId, string Title, string Author, string? CoverUrl,
     string? Isbn10, string? Isbn13, string? Publisher, DateOnly? PublishedDate,

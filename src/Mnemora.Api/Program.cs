@@ -25,6 +25,7 @@ if (!string.IsNullOrWhiteSpace(dataProtectionKeysPath))
 builder.Services.AddScoped<KnowledgeReader>();
 builder.Services.AddScoped<BookConsistency>();
 builder.Services.AddScoped<MemoryPackTransfer>();
+builder.Services.AddScoped<ExternalBookImporter>();
 builder.Services.Configure<GenerationOptions>(builder.Configuration.GetSection("MemoryPackGeneration"));
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<MemoryPackGenerationSessionStore>();

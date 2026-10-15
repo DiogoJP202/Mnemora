@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Mnemora.Application;
 using Mnemora.Domain;
 using Mnemora.Infrastructure;
@@ -13,6 +15,32 @@ public static class AdminBookEndpoints
     {
         var admin = app.MapGroup("/api/admin")
             .RequireAuthorization("Admin").WithTags("Admin Books");
+
+        admin.MapGet("/books/search", (string? q, MnemoraDbContext db,
+            IBookMetadataProvider provider, IMemoryCache cache, ILoggerFactory loggerFactory,
+            CancellationToken cancellationToken) =>
+            BooksEndpoints.SearchAsync(q, null, db, provider, cache, loggerFactory, cancellationToken))
+            .RequireRateLimiting("catalog-external");
+
+        admin.MapPost("/books/external", async (ExternalBookImportRequest request,
+            ExternalBookImporter importer, MnemoraDbContext db, CancellationToken cancellationToken) =>
+        {
+            try
+            {
+                var book = await importer.ImportAsync(request.ExternalProvider, request.ExternalId, cancellationToken);
+                return Results.Ok(await ToAdminDtoAsync(db, book));
+            }
+            catch (BookImportException exception)
+            {
+                return exception.StatusCode == 404 ? Results.NotFound()
+                    : Results.Problem(detail: exception.Message, statusCode: exception.StatusCode);
+            }
+            catch (Exception exception) when (!cancellationToken.IsCancellationRequested
+                && exception is HttpRequestException or JsonException or TaskCanceledException)
+            {
+                return Results.Problem("Não foi possível importar o livro agora.", statusCode: 503);
+            }
+        }).RequireRateLimiting("import-external");
 
         admin.MapGet("/books", async (MnemoraDbContext db) =>
         {

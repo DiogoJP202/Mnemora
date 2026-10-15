@@ -278,6 +278,14 @@ O Admin prepara separadamente o índice e o conhecimento. Unidades e lore só po
 
 A migration `MemoryPackWorkflow` preserva como publicados os índices e o lore já existentes em bancos anteriores. Novas importações e cadastros manuais começam sem conteúdo editorial; livros criados pelo Admin começam em rascunho. O seed original é publicado explicitamente.
 
+### Buscar e importar livros no Admin
+
+Em `/admin/books`, use **Buscar livro para preparar** com título, autor ou ISBN. A busca reaproveita Open Library e Google Books quando configurado; não exige nova chave nem usa IA. Selecione **Revisar edição**, confira idioma, ISBN e demais metadados e confirme **Importar e abrir livro**. Um livro já cadastrado oferece **Abrir livro**. O cadastro manual fica como alternativa.
+
+`GET /api/admin/books/search?q=...` pesquisa somente o catálogo compartilhado e os provedores configurados. `POST /api/admin/books/external` recebe apenas `externalProvider` e `externalId`; o servidor consulta os metadados e importa ou reutiliza o cadastro. Ambas exigem Admin, têm rate limit e respostas sem cache; a escrita exige antiforgery. Livros privados não são expostos. O serviço de importação é compartilhado com o leitor, preenche somente campos ausentes e preserva identidade, conteúdo editorial, publicação e progresso existentes. A importação administrativa não cria associação na biblioteca pessoal, pedido de pack, capítulos ou lore.
+
+Depois da importação, os controles existentes permitem consultar sumário, preparar fontes, gerar ou importar um pacote em rascunho e revisá-lo antes de publicar. **Busca automática de fontes narrativas ainda não está implementada.** Veja o [plano das próximas fases](docs/automated-preparation-plan.md) e o [levantamento dos três primeiros livros de Harry Potter](docs/harry-potter-source-assessment.md).
+
 ### Importar um pacote editorial completo
 
 O Admin pode baixar um modelo JSON ligado à edição, preenchê-lo com unidades, entidades, aliases, fatos e relações e validar o arquivo antes de importar. A gravação repete a validação e cria um rascunho atômico em um livro compartilhado sem conteúdo editorial. Ela não modifica metadados, progresso, notas ou histórico de leitores, e não publica automaticamente. Um pacote idêntico pode ser reenviado sem recriar IDs; conteúdo existente diferente retorna conflito e precisa ser editado pelos controles de autoria.
@@ -317,6 +325,7 @@ As evoluções candidatas estão registradas em [future.md](future.md).
 - [Formato de pacote editorial JSON v1](docs/memory-pack-format.md)
 - [Geração assistida: operação e limites](docs/assisted-generation.md)
 - [Próximas fases: adição e preparação automatizadas](docs/automated-preparation-plan.md)
+- [Cobertura inicial: três primeiros livros de Harry Potter](docs/harry-potter-source-assessment.md)
 - [Segurança de dependências](docs/dependency-security.md)
 - [Implantação no Render](docs/deployment.md)
 - [Arquitetura técnica](docs/technical-architecture.md)

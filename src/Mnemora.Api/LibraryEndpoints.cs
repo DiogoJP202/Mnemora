@@ -44,84 +44,20 @@ public static class LibraryEndpoints
         });
 
         library.MapPost("/external", async (
-            ExternalAddRequest request, ClaimsPrincipal user, MnemoraDbContext db,
-            IBookMetadataProvider provider, CancellationToken cancellationToken) =>
+            ExternalBookImportRequest request, ClaimsPrincipal user, MnemoraDbContext db,
+            ExternalBookImporter importer, CancellationToken cancellationToken) =>
         {
-            if (!provider.IsConfigured)
-                return Results.Problem("Busca externa não está configurada.",
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
-            if (string.IsNullOrWhiteSpace(request.ExternalProvider)
-                || request.ExternalProvider.Length > 80
-                || string.IsNullOrWhiteSpace(request.ExternalId)
-                || request.ExternalId.Length > 200)
-                return Results.BadRequest("Identificador externo inválido.");
-            ExternalBookMetadata? metadata;
-            try
+            Book book;
+            try { book = await importer.ImportAsync(request.ExternalProvider, request.ExternalId, cancellationToken); }
+            catch (BookImportException exception)
             {
-                metadata = await provider.GetAsync(request.ExternalProvider.Trim(),
-                    request.ExternalId.Trim(), cancellationToken);
+                return exception.StatusCode == 404 ? Results.NotFound()
+                    : Results.Problem(detail: exception.Message, statusCode: exception.StatusCode);
             }
             catch (Exception exception) when (!cancellationToken.IsCancellationRequested
                 && exception is HttpRequestException or JsonException or TaskCanceledException)
             {
-                return Results.Problem("Não foi possível importar o livro agora.",
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
-            }
-            if (metadata is null) return Results.NotFound();
-            var providerName = metadata.Provider?.Trim();
-            var externalId = metadata.ExternalId?.Trim();
-            var workId = metadata.WorkId?.Trim();
-            var title = NormalizeText(metadata.Title);
-            var author = NormalizeText(metadata.Author) ?? UnknownAuthor;
-            if (string.IsNullOrWhiteSpace(providerName) || providerName.Length > 80
-                || string.IsNullOrWhiteSpace(externalId) || externalId.Length > 200
-                || workId?.Length > 200
-                || title is null || title.Length > 300 || author.Length > 300)
-                return Results.Problem("O catálogo externo retornou dados inválidos.",
-                    statusCode: StatusCodes.Status503ServiceUnavailable);
-            var externalIsbn = NormalizeExternalIsbn(metadata.Isbn13, metadata.Isbn10);
-            var book = await db.Books.FirstOrDefaultAsync(x =>
-                x.ExternalProvider == providerName && x.ExternalId == externalId);
-            if (book is null && !string.IsNullOrWhiteSpace(workId))
-                book = await db.Books.FirstOrDefaultAsync(x =>
-                    x.ExternalProvider == providerName && x.ExternalId == workId,
-                    cancellationToken);
-            if (book is null)
-            {
-                book = new Book
-                {
-                    Title = title, Subtitle = LimitOptional(NormalizeText(metadata.Subtitle), 300),
-                    Author = author, CoverUrl = LimitOptional(metadata.CoverUrl?.Trim(), 2_000),
-                    Isbn10 = externalIsbn.Isbn10, Isbn13 = externalIsbn.Isbn13,
-                    Publisher = LimitOptional(NormalizeText(metadata.Publisher), 300),
-                    PublishedDate = metadata.PublishedDate,
-                    Language = LimitOptional(NormalizeText(metadata.Language), 35),
-                    ExternalProvider = providerName,
-                    ExternalId = externalId,
-                    CatalogKind = BookCatalogKind.Imported,
-                    ReadingOutlineStatus = EditorialContentStatus.None,
-                    LoreStatus = EditorialContentStatus.None,
-                    // External descriptions may contain spoilers, so they are never imported.
-                    Description = null
-                };
-                db.Books.Add(book);
-                try { await db.SaveChangesAsync(cancellationToken); }
-                catch (DbUpdateException)
-                {
-                    db.ChangeTracker.Clear();
-                    book = await db.Books.FirstOrDefaultAsync(x =>
-                        x.ExternalProvider == providerName
-                        && x.ExternalId == externalId, cancellationToken);
-                    if (book is null && !string.IsNullOrWhiteSpace(workId))
-                        book = await db.Books.FirstOrDefaultAsync(x =>
-                            x.ExternalProvider == providerName
-                            && x.ExternalId == workId, cancellationToken);
-                    if (book is null) throw;
-                }
-            }
-            else if (EnrichImportedBook(book, metadata, externalIsbn))
-            {
-                await db.SaveChangesAsync(cancellationToken);
+                return Results.Problem("Não foi possível importar o livro agora.", statusCode: 503);
             }
             var userId = CurrentUser.Id(user);
             var libraryBook = await db.UserBooks.FirstOrDefaultAsync(x =>
@@ -398,54 +334,6 @@ public static class LibraryEndpoints
     private static string? LimitOptional(string? value, int max) =>
         string.IsNullOrWhiteSpace(value) ? null : Limit(value, max);
 
-    private static BookIsbnNormalization NormalizeExternalIsbn(
-        string? isbn13, string? isbn10)
-    {
-        var normalized = BookIsbn.Normalize(isbn13);
-        if (normalized.IsValid && normalized.HasValue) return normalized;
-        normalized = BookIsbn.Normalize(isbn10);
-        return normalized.IsValid && normalized.HasValue
-            ? normalized
-            : new BookIsbnNormalization(true, null, null);
-    }
-
-    private static bool EnrichImportedBook(
-        Book book, ExternalBookMetadata metadata, BookIsbnNormalization isbn)
-    {
-        if (book.CatalogKind != BookCatalogKind.Imported) return false;
-        var changed = false;
-        changed |= SetIfMissing(book.Subtitle,
-            value => book.Subtitle = value,
-            LimitOptional(NormalizeText(metadata.Subtitle), 300));
-        changed |= SetIfMissing(book.CoverUrl,
-            value => book.CoverUrl = value,
-            LimitOptional(metadata.CoverUrl?.Trim(), 2_000));
-        changed |= SetIfMissing(book.Isbn10, value => book.Isbn10 = value, isbn.Isbn10);
-        changed |= SetIfMissing(book.Isbn13, value => book.Isbn13 = value, isbn.Isbn13);
-        changed |= SetIfMissing(book.Publisher,
-            value => book.Publisher = value,
-            LimitOptional(NormalizeText(metadata.Publisher), 300));
-        if (book.PublishedDate is null && metadata.PublishedDate is not null)
-        {
-            book.PublishedDate = metadata.PublishedDate;
-            changed = true;
-        }
-        changed |= SetIfMissing(book.Language,
-            value => book.Language = value,
-            LimitOptional(NormalizeText(metadata.Language), 35));
-        if (changed) book.UpdatedAt = DateTime.UtcNow;
-        return changed;
-    }
-
-    private static bool SetIfMissing(
-        string? current, Action<string> setter, string? candidate)
-    {
-        if (!string.IsNullOrWhiteSpace(current) || string.IsNullOrWhiteSpace(candidate))
-            return false;
-        setter(candidate);
-        return true;
-    }
-
     private static bool TryParseStatus(string? value, out UserBookStatus status)
     {
         status = default;
@@ -471,7 +359,6 @@ public static class LibraryEndpoints
             StringSplitOptions.RemoveEmptyEntries));
     }
 
-    private sealed record ExternalAddRequest(string ExternalProvider, string ExternalId);
     private sealed record ManualBookRequest(string? Title, string? Author, string? Isbn);
     private sealed record StatusWrite(string Status);
 }

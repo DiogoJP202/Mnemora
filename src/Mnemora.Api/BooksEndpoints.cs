@@ -25,96 +25,11 @@ public static class BooksEndpoints
                 book, availability[book.Id])));
         });
 
-        books.MapGet("/search", async (
-            string? q, ClaimsPrincipal user, MnemoraDbContext db,
-            IBookMetadataProvider provider, IMemoryCache cache,
-            ILoggerFactory loggerFactory,
+        books.MapGet("/search", (string? q, ClaimsPrincipal user, MnemoraDbContext db,
+            IBookMetadataProvider provider, IMemoryCache cache, ILoggerFactory loggerFactory,
             CancellationToken cancellationToken) =>
-        {
-            var query = q?.Trim();
-            if (string.IsNullOrWhiteSpace(query)) return Results.Ok(Array.Empty<BookSearchDto>());
-            if (query.Length > 100) return Results.BadRequest("Busca muito longa.");
-            var term = query.ToLowerInvariant();
-            var isbn = BookIsbn.Normalize(query);
-            var userId = TryUserId(user);
-            var localBooks = await db.Books.AsNoTracking().Where(x =>
-                    (x.CatalogKind != BookCatalogKind.Private || x.OwnerUserId == userId)
-                    && (x.Title.ToLower().Contains(term)
-                        || (x.Subtitle != null && x.Subtitle.ToLower().Contains(term))
-                        || x.Author.ToLower().Contains(term)
-                        || (x.Isbn10 != null && x.Isbn10.Contains(term))
-                        || (x.Isbn13 != null && x.Isbn13.Contains(term))
-                        || (isbn.Isbn10 != null && x.Isbn10 == isbn.Isbn10)
-                        || (isbn.Isbn13 != null && x.Isbn13 == isbn.Isbn13)))
-                .OrderBy(x => x.Title).Take(20)
-                .ToListAsync(cancellationToken);
-            var localAvailability = await AvailabilityAsync(db, localBooks, userId);
-            var local = localBooks.Select(book => ToSearchDto(
-                book, localAvailability[book.Id])).ToList();
-            if (!provider.IsConfigured) return Results.Ok(local);
-            try
-            {
-                var providerQuery = isbn.HasValue ? isbn.Canonical! : query;
-                var cacheKey = $"book-metadata:search:{NormalizeCacheKey(providerQuery)}";
-                var external = await cache.GetOrCreateAsync(cacheKey, async entry =>
-                {
-                    entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(4);
-                    entry.Size = 1;
-                    return await provider.SearchAsync(providerQuery, cancellationToken);
-                }) ?? [];
-                var externalProviders = external.Select(x => x.Provider).Distinct().ToList();
-                var externalIds = external
-                    .SelectMany(x => new[] { x.ExternalId, x.WorkId })
-                    .Where(x => !string.IsNullOrWhiteSpace(x))
-                    .Select(x => x!)
-                    .Distinct(StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-                var knownExternalBookRows = await db.Books.AsNoTracking()
-                    .Where(x => x.ExternalProvider != null && x.ExternalId != null
-                        && (x.CatalogKind != BookCatalogKind.Private || x.OwnerUserId == userId)
-                        && externalProviders.Contains(x.ExternalProvider)
-                        && externalIds.Contains(x.ExternalId))
-                    .ToListAsync(cancellationToken);
-                var knownAvailability = await AvailabilityAsync(
-                    db, knownExternalBookRows, userId);
-                var knownExternalBooks = knownExternalBookRows.Select(book =>
-                    ToSearchDto(book, knownAvailability[book.Id])).ToList();
-                var knownByKey = knownExternalBooks.ToDictionary(x =>
-                    ExternalKey(x.ExternalProvider!, x.ExternalId!),
-                    StringComparer.OrdinalIgnoreCase);
-                var includedBookIds = local.Where(x => x.Id.HasValue)
-                    .Select(x => x.Id!.Value).ToHashSet();
-                foreach (var item in external)
-                {
-                    knownByKey.TryGetValue(
-                        ExternalKey(item.Provider, item.ExternalId), out var known);
-                    if (known is null && !string.IsNullOrWhiteSpace(item.WorkId))
-                        knownByKey.TryGetValue(
-                            ExternalKey(item.Provider, item.WorkId), out known);
-                    if (known is not null)
-                    {
-                        if (known.Id is Guid knownId && includedBookIds.Add(knownId))
-                            local.Add(known);
-                        continue;
-                    }
-                    local.Add(new BookSearchDto(null, item.Provider, item.ExternalId, "external",
-                        item.Title, item.Subtitle, item.Author, item.CoverUrl,
-                        item.Isbn10, item.Isbn13, item.Publisher, item.PublishedDate,
-                        item.Language, item.PageCount, item.Categories, item.Edition, false,
-                        false, "Unavailable", false));
-                }
-                return Results.Ok(local);
-            }
-            catch (Exception exception) when (!cancellationToken.IsCancellationRequested
-                && exception is HttpRequestException or JsonException or TaskCanceledException)
-            {
-                loggerFactory.CreateLogger("Mnemora.BookCatalog")
-                    .LogWarning(exception, "Falha no provider de metadados de livros.");
-                return local.Count > 0 ? Results.Ok(local)
-                    : Results.Problem("Não foi possível buscar livros externos agora.",
-                        statusCode: StatusCodes.Status503ServiceUnavailable);
-            }
-        }).RequireRateLimiting("catalog-external");
+            SearchAsync(q, TryUserId(user), db, provider, cache, loggerFactory, cancellationToken))
+            .RequireRateLimiting("catalog-external");
 
         books.MapGet("/{bookId:guid}", async (
             Guid bookId, ClaimsPrincipal user, MnemoraDbContext db) =>
@@ -212,6 +127,94 @@ public static class BooksEndpoints
         }).RequireAuthorization();
 
         return app;
+    }
+
+    internal static async Task<IResult> SearchAsync(string? q, Guid? userId, MnemoraDbContext db,
+        IBookMetadataProvider provider, IMemoryCache cache, ILoggerFactory loggerFactory,
+        CancellationToken cancellationToken)
+    {
+        var query = q?.Trim();
+        if (string.IsNullOrWhiteSpace(query)) return Results.Ok(Array.Empty<BookSearchDto>());
+        if (query.Length > 100) return Results.BadRequest("Busca muito longa.");
+        var term = query.ToLowerInvariant();
+        var isbn = BookIsbn.Normalize(query);
+        var localBooks = await db.Books.AsNoTracking().Where(x =>
+                (x.CatalogKind != BookCatalogKind.Private || (userId != null && x.OwnerUserId == userId))
+                && (x.Title.ToLower().Contains(term)
+                    || (x.Subtitle != null && x.Subtitle.ToLower().Contains(term))
+                    || x.Author.ToLower().Contains(term)
+                    || (x.Isbn10 != null && x.Isbn10.Contains(term))
+                    || (x.Isbn13 != null && x.Isbn13.Contains(term))
+                    || (isbn.Isbn10 != null && x.Isbn10 == isbn.Isbn10)
+                    || (isbn.Isbn13 != null && x.Isbn13 == isbn.Isbn13)))
+            .OrderBy(x => x.Title).Take(20)
+            .ToListAsync(cancellationToken);
+        var localAvailability = await AvailabilityAsync(db, localBooks, userId);
+        var local = localBooks.Select(book => ToSearchDto(
+            book, localAvailability[book.Id])).ToList();
+        if (!provider.IsConfigured) return Results.Ok(local);
+        try
+        {
+            var providerQuery = isbn.HasValue ? isbn.Canonical! : query;
+            var cacheKey = $"book-metadata:search:{NormalizeCacheKey(providerQuery)}";
+            var external = await cache.GetOrCreateAsync(cacheKey, async entry =>
+            {
+                entry.AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(4);
+                entry.Size = 1;
+                return await provider.SearchAsync(providerQuery, cancellationToken);
+            }) ?? [];
+            var externalProviders = external.Select(x => x.Provider).Distinct().ToList();
+            var externalIds = external
+                .SelectMany(x => new[] { x.ExternalId, x.WorkId })
+                .Where(x => !string.IsNullOrWhiteSpace(x))
+                .Select(x => x!)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            var knownExternalBookRows = await db.Books.AsNoTracking()
+                .Where(x => x.ExternalProvider != null && x.ExternalId != null
+                    && (x.CatalogKind != BookCatalogKind.Private || (userId != null && x.OwnerUserId == userId))
+                    && externalProviders.Contains(x.ExternalProvider)
+                    && externalIds.Contains(x.ExternalId))
+                .ToListAsync(cancellationToken);
+            var knownAvailability = await AvailabilityAsync(
+                db, knownExternalBookRows, userId);
+            var knownExternalBooks = knownExternalBookRows.Select(book =>
+                ToSearchDto(book, knownAvailability[book.Id])).ToList();
+            var knownByKey = knownExternalBooks.ToDictionary(x =>
+                ExternalKey(x.ExternalProvider!, x.ExternalId!),
+                StringComparer.OrdinalIgnoreCase);
+            var includedBookIds = local.Where(x => x.Id.HasValue)
+                .Select(x => x.Id!.Value).ToHashSet();
+            foreach (var item in external)
+            {
+                knownByKey.TryGetValue(
+                    ExternalKey(item.Provider, item.ExternalId), out var known);
+                if (known is null && !string.IsNullOrWhiteSpace(item.WorkId))
+                    knownByKey.TryGetValue(
+                        ExternalKey(item.Provider, item.WorkId), out known);
+                if (known is not null)
+                {
+                    if (known.Id is Guid knownId && includedBookIds.Add(knownId))
+                        local.Add(known);
+                    continue;
+                }
+                local.Add(new BookSearchDto(null, item.Provider, item.ExternalId, "external",
+                    item.Title, item.Subtitle, item.Author, item.CoverUrl,
+                    item.Isbn10, item.Isbn13, item.Publisher, item.PublishedDate,
+                    item.Language, item.PageCount, item.Categories, item.Edition, false,
+                    false, "Unavailable", false));
+            }
+            return Results.Ok(local);
+        }
+        catch (Exception exception) when (!cancellationToken.IsCancellationRequested
+            && exception is HttpRequestException or JsonException or TaskCanceledException)
+        {
+            loggerFactory.CreateLogger("Mnemora.BookCatalog")
+                .LogWarning(exception, "Falha no provider de metadados de livros.");
+            return local.Count > 0 ? Results.Ok(local)
+                : Results.Problem("Não foi possível buscar livros externos agora.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+        }
     }
 
     private static Guid? TryUserId(ClaimsPrincipal user) =>

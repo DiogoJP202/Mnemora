@@ -33,7 +33,8 @@ Este relatório foi atualizado em 15 de outubro de 2026. As fases 18 a 21 foram 
 | 19 — Extração incremental | `1ab7f44` | Provedor Groq com schema estrito, montagem determinística, citações verificadas e apresentações congeladas |
 | 20 — Sessões e API | `fbb28f9` | Estado em memória, Admin/CSRF, posse, idempotência, revisões, quotas, expiração e cancelamento |
 | 21 — Jornada no Admin | `7f85756` | Entrada, progresso, revisão por capítulo, downloads, JSON editável, parcial confirmado e transferência existente |
-| 22 — Qualidade e entrega | Commit `phase 22: verify and document assisted generation` | Regressões, auditorias, avaliação controlada, guia de configuração e limitações |
+| 22 — Qualidade e entrega | `429e3b9` | Regressões, auditorias, avaliação controlada, guia de configuração e limitações |
+| 23 — Busca administrativa | Commit `phase 23: import book editions directly in admin` | Busca por título/autor/ISBN, confirmação, importação compartilhada e levantamento de fontes dos três primeiros Harry Potter |
 
 ## Funcionalidades entregues
 
@@ -238,6 +239,24 @@ Após o CI aprovado, a rota de exportação na [demonstração pública](https:/
 Os testes de projeção com provedor controlado comparam o pacote completo com cada prefixo, desconsiderando IDs, e cobrem ausência de progresso, antes/exatamente/depois, alias e relação tardios, evento retrospectivo, Recall e retrocesso. A API cobre autenticação, Admin, CSRF, posse de sessão, livro privado/preenchido, mudança da edição, repetição e concorrência, quotas/429, cancelamento e expiração. Um teste de concorrência intercepta a leitura do livro para impedir que uma revisão futura prevista vincule um resumo antigo ao próximo capítulo.
 
 Nenhum teste, CI ou jornada de navegador consumiu a API do Groq. Os tokens e tempos fictícios servem para validar contabilidade e integração, não para estimar qualidade ou capacidade real de um livro. A entrega não garante veracidade, ausência semântica de spoilers, faturamento gratuito da organização ou execução completa de livros longos. O [guia operacional](assisted-generation.md) explica ativação somente com Groq Free conferido, tratamento de dados, limites e downloads antes da expiração/redeploy. Fontes e resultados temporários não são gravados no banco nem no cache da PWA.
+
+## Entrega da fase 23 — busca e importação no Admin
+
+Em `/admin/books`, **Buscar livro para preparar** consulta o catálogo compartilhado e os mesmos provedores bibliográficos usados pelo leitor. A confirmação mostra os dados da edição antes de importar. Cadastro manual continua disponível. O novo serviço `ExternalBookImporter` centraliza criação, enriquecimento de campos ausentes, recuperação de concorrência e reutilização por identificador externo; importar no Admin não cria associação pessoal ou conteúdo editorial.
+
+| Verificação | Resultado | Evidência / limite |
+| --- | --- | --- |
+| `dotnet test Mnemora.slnx --configuration Release --no-restore` | 229 aprovados | Inclui 11 novos casos de Admin/auth/CSRF, cache/fallback da busca, privacidade, metadados controlados pelo servidor, repetição, concorrência com leitor e falhas sem gravação |
+| Build de produção e lint web | Aprovados | Componente de busca, tipos e helpers bibliográficos compartilhados com o leitor |
+| Testes Node de PWA e auditoria | 40 aprovados | Rotas privadas permanecem fora do cache; sem mudanças no service worker |
+| Navegador com Open Library real | Aprovado | Busca de Câmara Secreta → confirmação → importação → detalhe com ISBN `9788532530790`, editora Rocco e origem `OL35372744M` |
+| Reutilização e biblioteca | Aprovados | Nova busca oferece **Abrir livro** para o mesmo ID; biblioteca do Admin segue vazia; detalhe mostra zero unidades e entidades |
+| Layout | Aprovado em 360 e 1280 px | Temas claro/escuro, sem rolagem horizontal na busca, confirmação e detalhe; nenhum erro de console observado |
+| Banco / API de IA | Sem migration ou consumo de IA | SQLite e conta Admin descartáveis; geração desabilitada no ambiente de teste |
+
+A jornada usou o build de produção do Next.js em `3019`, uma API Kestrel isolada em `5198` e um proxy de QA em `127.0.0.1:3018`, encaminhando `/api` para essa API. Os processos e dados locais do usuário em `3000`/`5100` foram preservados. Os testes de integração verificam os headers `no-store` e a política de antiforgery; o proxy temporário de QA não é código de implantação.
+
+O [levantamento de fontes dos três primeiros Harry Potter](harry-potter-source-assessment.md) encontrou metadados, mas nenhum sumário nas três edições amostradas. Fontes narrativas completas por capítulo ainda não foram verificadas. A fase 23 não promete geração automática de conhecimento: descoberta/coleta e preparação integrada seguem nas fases propostas [24–28](automated-preparation-plan.md).
 
 ## Roteiro de aceite reproduzível
 

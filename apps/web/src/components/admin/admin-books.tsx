@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { apiGet, apiWrite } from "@/lib/api";
 import type { AdminBook } from "@/lib/admin-types";
+import { AdminBookImport } from "@/components/admin/admin-book-import";
 
 type Filter = "all" | "requested" | "preparing" | "available" | "empty";
 
@@ -72,7 +73,7 @@ export function AdminBooks() {
       </p>
       <h1 className="mt-2 text-4xl font-semibold">Pacotes de memória</h1>
       <p className="mt-3 max-w-3xl text-[var(--ink-soft)]">
-        Livros importados entram nesta fila sem lore. Prepare o índice, revise cada revelação e publique somente quando o conteúdo estiver completo.
+        Busque uma edição para iniciar a preparação ou acompanhe os livros da fila. Revise o índice e cada revelação antes de publicar o conteúdo.
       </p>
 
       {error && (
@@ -81,7 +82,11 @@ export function AdminBooks() {
         </p>
       )}
 
-      <form onSubmit={create} className="mt-8 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5 sm:grid-cols-[1fr_1fr_auto]">
+      <AdminBookImport />
+
+      <details className="mt-5 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
+        <summary className="min-h-11 cursor-pointer py-2 font-semibold">Cadastro manual (opcional)</summary>
+        <form onSubmit={create} className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_auto]">
         <label className="grid gap-2 text-sm">Título
           <input required value={title} onChange={(event) => setTitle(event.target.value)} className="rounded-lg border border-[var(--line)] px-3 py-2" />
         </label>
@@ -92,6 +97,7 @@ export function AdminBooks() {
           {saving ? "Criando…" : "Criar livro curado"}
         </button>
       </form>
+      </details>
 
       <div className="mt-8 grid gap-3 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-4 md:grid-cols-[1fr_auto]">
         <label className="grid gap-2 text-sm">Buscar na fila
