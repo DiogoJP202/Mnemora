@@ -102,6 +102,11 @@ export type SourcePreparationStatus = {
   completedUnits: number; totalUnits: number; units: SourcePreparationUnit[];
   diagnostics: string[]; expiresAt: string; generationRunId: string | null;
 };
+export type SourcePreparationDocument = {
+  preparationId: string; bookId: string;
+  units: { order: number; title: string; summary: string | null; sourceLanguage: string | null;
+    sourceUrl: string | null; revisionId: string | null; sourceHash: string | null }[];
+};
 export type GeneratedMemoryPackSelection = {
   id: string; json: string; originalJson: string; isPartial: boolean; reportHash: string;
   reviewed: boolean; partialAcknowledged: boolean;

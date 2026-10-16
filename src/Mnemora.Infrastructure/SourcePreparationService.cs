@@ -7,7 +7,8 @@ using Mnemora.Domain;
 namespace Mnemora.Infrastructure;
 
 public sealed class SourcePreparationService(SourcePreparationStore store, IBookNarrativeSourceProvider provider,
-    MemoryPackGenerationTarget target, MemoryPackGenerationService generation, MnemoraDbContext db)
+    MemoryPackGenerationTarget target, MemoryPackGenerationService generation, MnemoraDbContext db,
+    MemoryPackGenerationSessionStore generationStore)
 {
     public async Task<SourcePreparationStatus> CreateAsync(Guid owner, Guid bookId, CancellationToken token)
     {
@@ -44,6 +45,20 @@ public sealed class SourcePreparationService(SourcePreparationStore store, IBook
     }
     public SourcePreparationStatus? Current(Guid owner, Guid bookId) => store.Current(owner, bookId);
     public SourcePreparationStatus Get(Guid owner, Guid bookId, Guid id) => store.Snapshot(owner, bookId, id).Status;
+    public SourcePreparationDocument GetSources(Guid owner, Guid bookId, Guid id)
+    {
+        var snapshot = store.Snapshot(owner, bookId, id);
+        if (snapshot.Status.GenerationRunId is { } runId)
+            return generationStore.ReadPreparedSources(owner, bookId, runId, id);
+        var units = snapshot.Index?.Chapters.Select((chapter, index) =>
+        {
+            var source = snapshot.Sources[index];
+            return new SourcePreparationSource(chapter.Order, chapter.Title, source?.Text,
+                source?.Provenance.Language, source?.Provenance.Url, source?.Provenance.RevisionId,
+                source?.Provenance.SourceHash);
+        }).ToArray() ?? [];
+        return new(id, bookId, units);
+    }
 
     public async Task<SourcePreparationStatus> NextAsync(Guid owner, Guid bookId, Guid id,
         GenerationNextRequest request, CancellationToken token)

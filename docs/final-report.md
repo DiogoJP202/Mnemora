@@ -300,6 +300,16 @@ Foram aprovados 378 testes de backend, lint e build. As regressões incluem meta
 
 A jornada de navegador com edição sem idioma cadastrado confirmou pt-BR identificado pelo título e **38/38 sinopses reais em português**, com apenas três avisos gerais. O índice permaneceu inglês e a interface distinguiu os idiomas corretamente. A avaliação foi isolada em `3018`/`3019`/`5198`, sem Groq, importação ou publicação. A API local do usuário foi reiniciada para carregar a correção; as preparações anteriores em memória precisam ser refeitas para recolher as fontes no idioma preferido.
 
+#### Resumos completos e consulta da coleta
+
+A prévia de 160 caracteres estava sendo apresentada sem indicação suficiente do corte. O texto completo já era preservado e enviado à geração. Foi acrescentado um endpoint Admin com posse e `no-store` para ler as fontes integrais sob demanda, inclusive depois da transferência para a sessão de geração, mantendo os blocos de memória e recibos existentes. A tela identifica a prévia, oferece leitura integral por capítulo e separa o download completo do relatório compacto.
+
+O botão Consultar coleta já fazia o GET, mas não dava confirmação quando nada havia mudado. Agora mostra carregamento e confirmação com horário/contagens junto ao botão. A consulta é independente das restrições exclusivas da geração; ela lê o estado e orienta usar Continuar coleta quando houver capítulos pendentes.
+
+Os 381 testes de backend passaram, incluindo resumo maior que 160 caracteres, trecho final preservado na consulta e entrada da IA, leitura após transferência, lacunas, cancelamento, posse, autorização e expiração. Não houve mudança de migration ou formato JSON v1.
+
+Lint e build passaram. No navegador, uma fonte fictícia original com 441 caracteres foi exibida integralmente e baixada no campo `summary`, com seu trecho final e sem `summaryPreview` no arquivo completo. Consultar uma coleta inalterada mostrou horário, duas unidades consultadas e duas fontes disponíveis junto ao botão. A jornada usou Next.js de produção em `3019`, proxy de QA em `3018` e API/banco descartáveis em `5198`, sem APIs externas, Groq, importação ou publicação.
+
 ## Roteiro de aceite reproduzível
 
 ### 1. Preparar dependências

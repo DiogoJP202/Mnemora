@@ -18,6 +18,10 @@ public interface IBookNarrativeSourceProvider
 
 public sealed record SourcePreparationUnit(int Order, string Title, string Status, int SummaryBytes,
     string? SourceUrl, string? RevisionId, string? SourceHash, string? SummaryPreview, string? SourceLanguage = null);
+public sealed record SourcePreparationSource(int Order, string Title, string? Summary, string? SourceLanguage,
+    string? SourceUrl, string? RevisionId, string? SourceHash);
+public sealed record SourcePreparationDocument(Guid PreparationId, Guid BookId,
+    IReadOnlyList<SourcePreparationSource> Units);
 public sealed record SourcePreparationStatus(Guid PreparationId, Guid BookId, int Revision, string State,
     string SourceBookTitle, string Language, string SourceUrl, string Attribution, string License,
     int CompletedUnits, int TotalUnits, IReadOnlyList<SourcePreparationUnit> Units,

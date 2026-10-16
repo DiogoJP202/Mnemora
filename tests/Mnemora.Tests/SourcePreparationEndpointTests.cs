@@ -21,6 +21,74 @@ namespace Mnemora.Tests;
 
 public sealed class SourcePreparationEndpointTests
 {
+    private const string LongNarrative = "Mira works at the harbor. She reads the arrivals board, checks each rope and waits beside the small lighthouse while the tide slowly returns. The old keeper brings a wooden box and explains that it belongs to the coastal archive. Mira writes the number in her notebook and carries the box through the courtyard. At the end of the summary, she places the copper compass on the archive desk.";
+
+    [Fact]
+    public async Task Full_summary_is_available_on_demand_and_reaches_generation_beyond_the_preview()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        fixture.Sources.FirstSummary = LongNarrative;
+        var ready = await fixture.CollectAsync();
+        var id = PreparationId(ready);
+        Assert.Equal(160, ready["units"]![0]!["summaryPreview"]!.GetValue<string>().Length);
+        Assert.DoesNotContain("copper compass", ready.ToJsonString());
+        var response = await fixture.Admin.GetAsync(fixture.Path($"{id}/sources"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        var before = await Read(response);
+        Assert.Equal(LongNarrative, before["units"]![0]!["summary"]!.GetValue<string>());
+        Assert.Equal(Hash(LongNarrative), before["units"]![0]!["sourceHash"]!.GetValue<string>());
+        Assert.Equal(2, fixture.Sources.ChapterCalls);
+        Assert.Equal(0, fixture.Generation.Calls);
+        var generated = await Read(await Write(fixture.Admin, fixture.Path($"{id}/generate"), GenerateOperation(ready)));
+        var after = await fixture.Admin.GetAsync(fixture.Path($"{id}/sources"));
+        Assert.Equal(HttpStatusCode.OK, after.StatusCode);
+        Assert.Equal(before.ToJsonString(), (await Read(after)).ToJsonString());
+        var runId = generated["runId"]!.GetValue<Guid>();
+        var step = await Write(fixture.Admin, fixture.GenerationPath($"{runId}/next"), Operation(generated));
+        Assert.Equal(HttpStatusCode.OK, step.StatusCode);
+        Assert.Equal(LongNarrative, Assert.Single(fixture.Generation.Inputs[0].Paragraphs).Text);
+        Assert.Contains("copper compass", fixture.Generation.Inputs[0].Paragraphs[0].Text);
+        Assert.DoesNotContain("copper compass", (await fixture.StatusAsync(id)).ToJsonString());
+        await fixture.AssertNoEditorialContentAsync();
+    }
+
+    [Fact]
+    public async Task Full_source_endpoint_enforces_authentication_owner_book_and_expiration()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        var ready = await fixture.CollectAsync();
+        var id = PreparationId(ready);
+        var path = fixture.Path($"{id}/sources");
+        using var anonymous = fixture.Factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await fixture.Reader.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.OtherAdmin.GetAsync(path)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Admin.GetAsync(path.Replace(fixture.BookId.ToString(), Guid.NewGuid().ToString()))).StatusCode);
+        fixture.Clock.Advance(TimeSpan.FromMinutes(31));
+        Assert.Equal(HttpStatusCode.NotFound, (await fixture.Admin.GetAsync(path)).StatusCode);
+        Assert.Equal(2, fixture.Sources.ChapterCalls);
+        Assert.Equal(0, fixture.Generation.Calls);
+    }
+
+    [Fact]
+    public async Task Cancelled_partial_collection_keeps_full_completed_sources_and_null_gaps()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        fixture.Sources.FirstSummary = LongNarrative;
+        fixture.Sources.MissingOrder = 2;
+        var ready = await fixture.CollectAsync();
+        var id = PreparationId(ready);
+        await Write(fixture.Admin, fixture.Path($"{id}/cancel"));
+        var response = await fixture.Admin.GetAsync(fixture.Path($"{id}/sources"));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var document = await Read(response);
+        Assert.Equal(LongNarrative, document["units"]![0]!["summary"]!.GetValue<string>());
+        Assert.Null(document["units"]![1]!["summary"]);
+        Assert.Equal(0, fixture.Generation.Calls);
+        await fixture.AssertNoEditorialContentAsync();
+    }
+
     [Fact]
     public async Task Missing_language_is_inferred_from_portuguese_title_and_foreign_source_warning_is_grouped()
     {
@@ -682,6 +750,7 @@ public sealed class SourcePreparationEndpointTests
         public int? MissingOrder { get; set; }
         public int? FailOrder { get; set; }
         public bool BlockChapter { get; set; }
+        public string? FirstSummary { get; set; }
         public List<string> RequestedKeys { get; } = [];
         public NarrativeSourceIndex? LastChapterIndex { get; private set; }
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -712,7 +781,7 @@ public sealed class SourcePreparationEndpointTests
             if (chapter.Order == FailOrder)
                 throw new GenerationException("source_rate_limited", "A fonte de teste atingiu sua quota temporária.", 429, 3);
             if (chapter.Order == MissingOrder) return null;
-            var text = chapter.Order == 1 ? "Mira works at the harbor." : "Mira carries a secret map.";
+            var text = chapter.Order == 1 ? FirstSummary ?? "Mira works at the harbor." : "Mira carries a secret map.";
             return new(chapter.Order, chapter.Title, text, new(
                 $"capitulo-{chapter.Order:000}", "Wikibooks", $"https://en.wikibooks.org/wiki/Test/Chapter_{chapter.Order}",
                 $"chapter-revision-{chapter.Order}", $"page-{chapter.Order}", "en", "CC BY-SA 4.0", "Fictional test authors",

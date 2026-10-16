@@ -36,6 +36,10 @@ As sinopses de terceiros não são incluídas como fixtures no repositório. Os 
 
 ## Operação
 
+`summaryPreview` é uma prévia de até 160 caracteres, usada somente na listagem e no relatório compacto. O texto coletado continua integral no servidor e é esse texto que entra na geração. No capítulo, **Ler resumo completo** consulta a fonte integral; **Baixar resumos completos** exporta o campo `summary` com todo o texto e as referências. O relatório com prévias continua separado. Esses downloads não são pacotes JSON v1 para importação.
+
+**Consultar coleta** atualiza o estado já existente no servidor e mostra horário, contagem e confirmação junto ao botão, mesmo sem mudança de progresso. Não busca capítulos novos: para isso, use **Continuar coleta**. Consultar e ler fontes já coletadas não dependem da disponibilidade do Groq. Reinício ou expiração da sessão ainda podem tornar essas fontes indisponíveis.
+
 No livro vazio, use **Gerar pacote com IA → Buscar e preparar fontes**. A disponibilidade da geração inclui `automaticSources`, com suporte ao título/autoria cadastrados, motivo de indisponibilidade e lista de títulos cobertos, sem consulta externa. A tela informa isso antes da coleta e impede iniciar obras sem suporte. A página coleta as unidades em sequência. Confira a correspondência com a edição e use **Gerar pacote com as fontes coletadas**; o documento é entregue à validação existente sem baixar, preencher e reenviar JSON. A alternativa manual permanece expansível. A coleta pode ser cancelada, descartada ou retomada explicitamente após erro; reabrir a página recupera a referência enquanto o mesmo processo conservar a sessão. Uma preparação concluída pode ser descartada para trabalhar em outro livro.
 
 Todas as rotas abaixo usam a base `/api/admin/books/{bookId}/source-preparations`, exigem Admin, respostas `no-store` e antiforgery nas escritas. A preparação pertence ao administrador autenticado; outra conta recebe `404`.
@@ -45,6 +49,7 @@ Todas as rotas abaixo usam a base `/api/admin/books/{bookId}/source-preparations
 | `POST /` | Resolve a obra a partir do título/autoria salvos e obtém o índice; não aceita URLs ou fontes do navegador. |
 | `GET /current` | Referência e cobertura da preparação do próprio Admin neste livro; `404` se ausente/expirada. |
 | `GET /{preparationId}` | Cobertura, prévias limitadas, origem, revisões, hashes e diagnósticos. |
+| `GET /{preparationId}/sources` | Resumos completos sob demanda, sem nova coleta ou chamada IA; posse/Admin e `no-store`. Depois da transferência, lê os mesmos bytes da sessão de geração. |
 | `POST /{preparationId}/next` | `{operationId, expectedRevision}`; servidor escolhe o próximo capítulo, com recibo de operação repetida. |
 | `POST /{preparationId}/generate` | `{operationId, expectedRevision, editionConfirmed, indexComplete}`; copia fontes/procedência do servidor para a sessão de geração atual. Reenvio recupera a sessão criada. |
 | `POST /{preparationId}/cancel` | Cancela a leitura corrente e impede novas etapas. A preparação não é substituída enquanto a chamada anterior ainda estiver ativa. |

@@ -22,6 +22,10 @@ public static class AdminSourcePreparationEndpoints
         group.MapGet("/{preparationId:guid}", (Guid bookId, Guid preparationId, HttpContext context, SourcePreparationService service) =>
             AdminMemoryPackGenerationEndpoints.ExecuteAsync(context, () => Task.FromResult<IResult>(
                 Results.Ok(service.Get(CurrentUser.Id(context.User), bookId, preparationId)))));
+        group.MapGet("/{preparationId:guid}/sources", (Guid bookId, Guid preparationId, HttpContext context,
+            SourcePreparationService service) =>
+            AdminMemoryPackGenerationEndpoints.ExecuteAsync(context, () => Task.FromResult<IResult>(
+                Results.Ok(service.GetSources(CurrentUser.Id(context.User), bookId, preparationId)))));
         group.MapPost("/{preparationId:guid}/next", async (Guid bookId, Guid preparationId, HttpContext context,
             SourcePreparationService service, CancellationToken token) =>
             await AdminMemoryPackGenerationEndpoints.ExecuteAsync(context, async () =>

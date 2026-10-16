@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { apiGet, apiWrite, ApiResponseError, downloadJson } from "@/lib/api";
-import type { AdminBook, GenerationSession, SourcePreparationAvailability, SourcePreparationStatus } from "@/lib/admin-types";
+import type { AdminBook, GenerationSession, SourcePreparationAvailability, SourcePreparationDocument, SourcePreparationStatus } from "@/lib/admin-types";
 
 type Props = {
   book: AdminBook; disabled: boolean;
@@ -10,7 +10,7 @@ type Props = {
   onWorkingChange: (working: boolean) => void;
   onStarted: (session: GenerationSession) => void | Promise<void>;
 };
-type Working = "collect" | "refresh" | "generate" | "cancel" | null;
+type Working = "collect" | "refresh" | "generate" | "cancel" | "sources" | null;
 type Operation = { operationId: string; expectedRevision: number };
 const button = "min-h-11 rounded-lg border border-[var(--line)] px-4 py-2 text-sm disabled:opacity-50";
 const primary = `${button} bg-[var(--action-surface)] text-[var(--action-text)]`;
@@ -28,14 +28,16 @@ function message(cause: unknown) {
 }
 const minimumStepIntervalMs = 2100;
 
-function waitBeforeNextStep(milliseconds: number, signal: AbortSignal) {
+async function waitBeforeNextStep(lastStarted: number | null, signal: AbortSignal): Promise<number> {
   signal.throwIfAborted();
-  if (milliseconds <= 0) return Promise.resolve();
-  return new Promise<void>((resolve, reject) => {
-    const onAbort = () => { clearTimeout(timer); reject(signal.reason); };
-    const timer = setTimeout(() => { signal.removeEventListener("abort", onAbort); resolve(); }, milliseconds);
-    signal.addEventListener("abort", onAbort, { once: true });
-  });
+  const milliseconds = lastStarted === null ? 0 : minimumStepIntervalMs - (performance.now() - lastStarted);
+  if (milliseconds > 0) await new Promise<void>((resolve, reject) => {
+      const onAbort = () => { clearTimeout(timer); reject(signal.reason); };
+      const timer = setTimeout(() => { signal.removeEventListener("abort", onAbort); resolve(); }, milliseconds);
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+  signal.throwIfAborted();
+  return performance.now();
 }
 
 export function AdminAutomaticSources({ book, disabled, availability, onWorkingChange, onStarted }: Props) {
@@ -46,6 +48,10 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
   const [working, setWorking] = useState<Working>(null);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [consultation, setConsultation] = useState("");
+  const [sourceDocument, setSourceDocument] = useState<SourcePreparationDocument | null>(null);
+  const [openSummary, setOpenSummary] = useState<number | null>(null);
+  const sourceCache = useRef<{ key: string; document: SourcePreparationDocument } | null>(null);
   const [editionConfirmed, setEditionConfirmed] = useState(false);
   const [indexComplete, setIndexComplete] = useState(false);
   const [partialConfirmed, setPartialConfirmed] = useState(false);
@@ -68,6 +74,11 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
   }
 
   function update(updated: SourcePreparationStatus) {
+    if (preparationRef.current?.preparationId !== updated.preparationId || preparationRef.current?.revision !== updated.revision) {
+      sourceCache.current = null;
+      setSourceDocument(null);
+      setOpenSummary(null);
+    }
     preparationRef.current = updated;
     setPreparation(updated);
     setExpired(false);
@@ -103,6 +114,7 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
     onWorkingChange(true);
     setError("");
     setNotice("");
+    setConsultation("");
     return current;
   }
 
@@ -144,9 +156,7 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
         current.signal.throwIfAborted();
         const operation = pending.current?.kind === "next" ? pending.current.operation : { operationId: crypto.randomUUID(), expectedRevision: progress.revision };
         pending.current = { kind: "next", operation };
-        if (lastStepStarted.current !== null) await waitBeforeNextStep(minimumStepIntervalMs - (performance.now() - lastStepStarted.current), current.signal);
-        current.signal.throwIfAborted();
-        lastStepStarted.current = performance.now();
+        lastStepStarted.current = await waitBeforeNextStep(lastStepStarted.current, current.signal);
         progress = await apiWrite<SourcePreparationStatus>(`${base}/${progress.preparationId}/next`, "POST", operation, { signal: current.signal });
         pending.current = null;
         update(progress);
@@ -163,11 +173,56 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
   }
 
   async function refresh() {
-    if (formDisabled) return;
+    if (loading || working !== null || expired) return;
     const current = begin("refresh");
     if (!current) return;
-    try { await refreshStatus(current.signal); }
+    try {
+      const updated = await refreshStatus(current.signal);
+      const at = new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" }).format(new Date());
+      const collected = updated.units.filter((unit) => unit.summaryBytes > 0).length;
+      setConsultation(`Coleta consultada às ${at}: ${updated.completedUnits} de ${updated.totalUnits} capítulos consultados, ${collected} com resumo. ${updated.state === "Collecting" ? "Para buscar os capítulos pendentes, use Continuar coleta." : "Estado confirmado no servidor."}`);
+    }
     catch (cause) { if (!current.signal.aborted) setError(message(cause)); }
+    finally { finish(current); }
+  }
+
+  async function loadSources(signal: AbortSignal) {
+    const current = await refreshStatus(signal);
+    const key = `${current.preparationId}:${current.revision}`;
+    if (sourceCache.current?.key === key) return sourceCache.current.document;
+    const document = await apiGet<SourcePreparationDocument>(`${base}/${current.preparationId}/sources`, { signal });
+    sourceCache.current = { key, document };
+    setSourceDocument(document);
+    return document;
+  }
+
+  async function readSummary(order: number) {
+    if (loading || working !== null || expired) return;
+    if (openSummary === order) { setOpenSummary(null); return; }
+    const current = begin("sources");
+    if (!current) return;
+    try {
+      const document = await loadSources(current.signal);
+      if (!document.units.find((unit) => unit.order === order)?.summary) throw new Error("Ainda não há um resumo completo coletado para este capítulo.");
+      setOpenSummary(order);
+    } catch (cause) { if (!current.signal.aborted) setError(message(cause)); }
+    finally { finish(current); }
+  }
+
+  async function downloadSources() {
+    if (loading || working !== null || expired) return;
+    const current = begin("sources");
+    if (!current) return;
+    try {
+      const document = await loadSources(current.signal);
+      const status = preparationRef.current!;
+      const report = { ...status, units: document.units.map((unit) => {
+        const metadata = status.units.find((known) => known.order === unit.order);
+        return { ...unit, status: metadata?.status, summaryBytes: metadata?.summaryBytes };
+      }) };
+      downloadJson(`mnemora-${book.id}-resumos-completos.json`, JSON.stringify(report, null, 2));
+      setConsultation("Download preparado com os resumos completos no campo summary.");
+    } catch (cause) { if (!current.signal.aborted) setError(message(cause)); }
     finally { finish(current); }
   }
 
@@ -237,7 +292,9 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
           <ol className="mt-2 grid max-h-96 gap-3 overflow-auto text-sm">{preparation.units.map((unit) => <li key={unit.order} className="min-w-0 border-t border-[var(--line)] pt-3">
             <p className="break-words"><strong>{unit.order}. {unit.title}</strong> · {unitLabels[unit.status] ?? unit.status}</p>
             {unit.sourceLanguage && <p className="mt-1 text-xs text-[var(--ink-soft)]">Idioma da sinopse: {languageLabel(unit.sourceLanguage)}</p>}
-            {unit.summaryPreview && <p className="mt-2 whitespace-pre-wrap break-words text-[var(--ink-soft)]">{unit.summaryPreview}</p>}
+            {unit.summaryPreview && <p className="mt-2 whitespace-pre-wrap break-words text-[var(--ink-soft)]"><span className="font-semibold">Prévia: </span>{unit.summaryPreview}{unit.summaryBytes > new TextEncoder().encode(unit.summaryPreview).byteLength ? "…" : ""}</p>}
+            {unit.summaryBytes > 0 && <button type="button" className={`${button} mt-2`} disabled={loading || working !== null || expired} aria-expanded={openSummary === unit.order} aria-controls={`full-summary-${unit.order}`} onClick={() => void readSummary(unit.order)}>{openSummary === unit.order ? "Fechar resumo completo" : "Ler resumo completo"}</button>}
+            {openSummary === unit.order && <div id={`full-summary-${unit.order}`} className="mt-3 whitespace-pre-wrap break-words rounded-lg border border-[var(--line)] p-3">{sourceDocument?.units.find((source) => source.order === unit.order)?.summary}</div>}
             {unit.sourceUrl && <a href={unit.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-11 items-center break-all underline">Fonte do capítulo</a>}
             {unit.sourceHash && <p className="mt-1 break-all text-xs text-[var(--ink-soft)]">SHA-256: {unit.sourceHash}{unit.revisionId ? ` · revisão ${unit.revisionId}` : ""}</p>}
           </li>)}</ol>
@@ -246,10 +303,13 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
         <div className="mt-4 flex flex-wrap gap-2">
           {preparation.state === "Collecting" && !expired && <button type="button" disabled={formDisabled} className={primary} onClick={() => void collect()}>Continuar coleta</button>}
           {(preparation.state === "Cancelled" || expired) && <button type="button" disabled={formDisabled || !canStartCollection} className={primary} onClick={() => void collect(true)}>Iniciar nova coleta</button>}
-          <button type="button" disabled={formDisabled || expired} className={button} onClick={() => void refresh()}>Consultar coleta</button>
-          <button type="button" disabled={working !== null} className={button} onClick={() => downloadJson(`mnemora-${book.id}-fontes-coletadas.json`, JSON.stringify(preparation, null, 2))}>Baixar relatório da coleta</button>
+          <button type="button" disabled={loading || working !== null || expired} className={button} aria-busy={working === "refresh"} onClick={() => void refresh()}>{working === "refresh" ? "Consultando coleta…" : "Consultar coleta"}</button>
+          <button type="button" disabled={loading || working !== null || expired} className={button} onClick={() => void downloadSources()}>{working === "sources" ? "Carregando resumos…" : "Baixar resumos completos"}</button>
+          <button type="button" disabled={working !== null} className={button} onClick={() => downloadJson(`mnemora-${book.id}-fontes-coletadas.json`, JSON.stringify(preparation, null, 2))}>Baixar relatório com prévias</button>
           {preparation.state !== "Cancelled" && !expired && <button type="button" disabled={working === "cancel" || disabled} className={button} onClick={() => void cancel()}>{working === "cancel" ? "Cancelando…" : preparation.state === "Collecting" ? "Cancelar coleta" : "Descartar preparação"}</button>}
         </div>
+        {working === "refresh" && <p role="status" className="mt-3 text-sm">Consultando o estado da coleta no servidor…</p>}
+        {consultation && <p role="status" className="mt-3 rounded-lg border border-[var(--line)] p-3 text-sm">{consultation}</p>}
         {(preparation.state === "Ready" || preparation.state === "Partial") && <div className="mt-5 grid gap-3 border-t border-[var(--line)] pt-4">
           <label className="flex min-h-11 items-start gap-3 text-sm"><input type="checkbox" disabled={formDisabled} checked={editionConfirmed} onChange={(event) => setEditionConfirmed(event.target.checked)} className="mt-1 shrink-0" /><span>Conferi que a fonte corresponde a <strong>{book.title}</strong>, de {book.author}, e que a sequência serve para esta edição.</span></label>
           <label className="flex min-h-11 items-start gap-3 text-sm"><input type="checkbox" disabled={formDisabled} checked={indexComplete} onChange={(event) => { setIndexComplete(event.target.checked); setPartialConfirmed(false); }} className="mt-1 shrink-0" /><span>Conferi que o índice está completo. Sem esta confirmação, o pacote será parcial.</span></label>
@@ -260,7 +320,7 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
         </div>}
       </div>}
       {!preparation && working === "collect" && <button type="button" className={`${button} mt-3`} onClick={() => void cancel()}>Cancelar busca</button>}
-      <p className="mt-3 text-xs text-[var(--ink-soft)]">A coleta permanece apenas na sessão temporária do servidor. O relatório contém prévias e referências; não é um pacote para importação.</p>
+      <p className="mt-3 text-xs text-[var(--ink-soft)]">A prévia mostra até 160 caracteres. A IA recebe o resumo completo coletado; use a leitura ou o download completo para conferi-lo. A coleta permanece apenas na sessão temporária do servidor e seus relatórios não são pacotes para importação.</p>
     </section>
   );
 }

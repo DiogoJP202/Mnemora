@@ -307,6 +307,8 @@ No detalhe administrativo de um **livro compartilhado sem conteúdo editorial e 
 
 A geração processa cada capítulo em ordem e entrega o JSON v1 com um relatório separado de evidências e fontes/revisões. Revise candidatos, citações e revelações antes de enviar à validação e importação atuais; o pacote sempre entra em rascunho. Capítulos sem sinopse e índice não confirmado tornam o resultado parcial e exigem reconhecimento explícito. Análises, páginas de personagens e conhecimento próprio do modelo não são usados para preencher lacunas.
 
+A lista mostra uma prévia de 160 caracteres; **Ler resumo completo** e **Baixar resumos completos** permitem conferir todo o texto coletado. O corte da prévia não afeta a entrada da IA. **Consultar coleta** confirma o estado atual e as contagens junto ao botão; **Continuar coleta** busca capítulos pendentes.
+
 O recurso permanece **desabilitado por padrão**. Para habilitar, configure exclusivamente no backend `MemoryPackGeneration__Enabled=true`, `MemoryPackGeneration__Provider=Groq`, `MemoryPackGeneration__Model=openai/gpt-oss-120b` e `MemoryPackGeneration__ApiKey` como segredo. Confirme a organização no Groq Free antes de ativar: o aplicativo não verifica faturamento nem oferece fallback pago. Não coloque a chave no frontend ou no Git. A API .NET não lê arquivos `.env` automaticamente.
 
 As fontes são enviadas ao Groq. Sessões ficam somente na memória do backend e desaparecem em reinícios ou expiração; baixe os dois artefatos durante a revisão. Uma unidade já cadastrada, mesmo em rascunho, impede a geração neste MVP. Leia o [guia de configuração, uso e limites](docs/assisted-generation.md) e use as [fontes fictícias originais](docs/examples/generation-sources.txt) para uma avaliação controlada.

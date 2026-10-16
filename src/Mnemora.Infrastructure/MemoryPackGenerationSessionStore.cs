@@ -155,6 +155,26 @@ public sealed class MemoryPackGenerationSessionStore(IOptions<GenerationOptions>
         return new GenerationSessionSnapshot(Status(session), document, report, source);
     });
 
+    // Full summaries are read only on demand. They remain in the same bounded UTF-8
+    // block used for generation, never in status receipts or a second retained copy.
+    internal SourcePreparationDocument ReadPreparedSources(Guid owner, Guid bookId, Guid runId,
+        Guid preparationId) => Access(() =>
+    {
+        var session = Find(owner, bookId, runId);
+        Touch(session);
+        var sources = Deserialize<GenerationSource[]>(session.Sources);
+        var provenance = Deserialize<GenerationSourceProvenance[]>(session.SourceProvenance)
+            .ToDictionary(source => source.UnitSlug, StringComparer.Ordinal);
+        var units = sources.Select((source, index) =>
+        {
+            provenance.TryGetValue($"capitulo-{index + 1:000}", out var origin);
+            return new SourcePreparationSource(index + 1, source.Title,
+                string.IsNullOrWhiteSpace(source.Summary) ? null : source.Summary,
+                origin?.Language, origin?.Url, origin?.RevisionId, origin?.SourceHash);
+        }).ToArray();
+        return new SourcePreparationDocument(preparationId, bookId, units);
+    });
+
     public GenerationSessionStatus? ResolveReceipt(Guid owner, Guid bookId, Guid runId,
         GenerationNextRequest request) => Access(() => ReceiptStatus(Find(owner, bookId, runId), request));
 
