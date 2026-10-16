@@ -290,6 +290,16 @@ Os testes de backend passaram de 315 para 337, cobrindo início pelos títulos P
 
 Após o ajuste, uma nova coleta real no navegador completou **38/38 sinopses**, sem erro ou repetição. O ambiente usou Next.js de produção em `3019`, API e banco descartáveis em `5198` e proxy de QA em `3018`. Não houve chamada Groq, geração, importação ou publicação desse livro. Os serviços reais em `3000`/`5100` permanecem disponíveis com a correção local; os processos de QA são encerrados depois da verificação.
 
+#### Correção de idioma — título, fontes e saída
+
+O idioma válido cadastrado passou a ter prioridade; na ausência dele, títulos conhecidos em português indicam pt-BR como padrão inferido, e os ingleses indicam en. O app mostra a origem da escolha e não grava a inferência nos metadados da edição. O título não comprova a região brasileira: a confirmação editorial permanece necessária.
+
+Ordem da Fênix mantém o índice inglês verificado, mas confirma suas páginas portuguesas com uma consulta limitada à API oficial e prioriza `Sinopse` quando o destino é português. Destino inglês não depende dessa consulta PT. Alternativas inglesas por ausência editorial geram um único aviso agrupado; idioma do índice, destino e sinopses aparecem separados. A geração recebe `outputLanguage`, com prompt `generation-v3`, preservando citações literais e nomes próprios sustentados, sem glossário de identidades futuras.
+
+Foram aprovados 378 testes de backend, lint e build. As regressões incluem metadados antes do título, inferência visível sem alterar a edição, aviso agrupado, payload do modelo, mapeamento PT limitado, preferência EN sem dependência PT e ausência de fallback em falhas operacionais. O adaptador real confirmou as 38 páginas PT e coletou sinopses válidas dos capítulos inicial e final sem chamar Groq.
+
+A jornada de navegador com edição sem idioma cadastrado confirmou pt-BR identificado pelo título e **38/38 sinopses reais em português**, com apenas três avisos gerais. O índice permaneceu inglês e a interface distinguiu os idiomas corretamente. A avaliação foi isolada em `3018`/`3019`/`5198`, sem Groq, importação ou publicação. A API local do usuário foi reiniciada para carregar a correção; as preparações anteriores em memória precisam ser refeitas para recolher as fontes no idioma preferido.
+
 ## Roteiro de aceite reproduzível
 
 ### 1. Preparar dependências

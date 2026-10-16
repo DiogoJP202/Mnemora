@@ -32,16 +32,120 @@ public sealed class WikibooksNarrativeSourceProviderTests
     }
 
     [Fact]
-    public async Task Fifth_book_follows_the_english_index_and_only_its_synopsis_without_guessing_portuguese_pages()
+    public async Task Fifth_book_follows_the_english_index_when_english_is_preferred()
     {
-        using var fixture = new Fixture("hp5");
-        var index = await fixture.Provider.GetIndexAsync("hp5", default);
+        using var fixture = new Fixture("hp5") { MappingMode = "rate-limit" };
+        var index = await fixture.Provider.GetIndexAsync("hp5", default, "en");
         var result = await fixture.Provider.GetChapterAsync(index, index.Chapters[0], default);
         Assert.NotNull(result);
         Assert.Equal("en", result.Provenance.Language);
         Assert.Contains("Order%20of%20the%20Phoenix", result.Provenance.Url);
         Assert.Equal("Ari sees a lantern.", result.Text);
+        Assert.Equal("en", index.PreferredLanguage);
         Assert.All(fixture.Calls, uri => Assert.Equal("en.wikibooks.org", uri.Host));
+        Assert.DoesNotContain(fixture.Calls, uri => uri.Query.Contains("list=allpages", StringComparison.Ordinal));
+        Assert.Equal(4, fixture.Calls.Count);
+    }
+
+    [Fact]
+    public async Task Fifth_book_prefers_only_the_portuguese_page_confirmed_by_the_bounded_listing()
+    {
+        using var fixture = new Fixture("hp5");
+        var index = await fixture.Provider.GetIndexAsync("hp5", default, "pt");
+        Assert.Equal(38, index.Chapters.Count);
+        Assert.Equal(fixture.PortuguesePage + "/Capítulo 1", index.Chapters[0].PortuguesePageTitle);
+        Assert.Contains("aplimit=65", fixture.Calls[2].Query);
+        Assert.Contains("apnamespace=0", fixture.Calls[2].Query);
+        var result = await fixture.Provider.GetChapterAsync(index, index.Chapters[0], default);
+        Assert.NotNull(result);
+        Assert.Equal("pt", result.Provenance.Language);
+        Assert.Equal("Ari encontra Lia & sua carta.\n\nA pista parece incerta.", result.Text);
+        Assert.All(fixture.Calls.Skip(2), uri => Assert.Equal("pt.wikibooks.org", uri.Host));
+        Assert.Equal(5, fixture.Calls.Count);
+    }
+
+    [Fact]
+    public async Task Unlisted_portuguese_chapter_is_never_guessed_or_requested()
+    {
+        using var fixture = new Fixture("hp5") { MappingMode = "empty" };
+        var index = await fixture.Provider.GetIndexAsync("hp5", default, "pt");
+        Assert.All(index.Chapters, chapter => Assert.Null(chapter.PortuguesePageTitle));
+        var result = await fixture.Provider.GetChapterAsync(index, index.Chapters[0], default);
+        Assert.NotNull(result);
+        Assert.Equal("en", result.Provenance.Language);
+        Assert.All(fixture.Calls.Skip(3), uri => Assert.Equal("en.wikibooks.org", uri.Host));
+        Assert.Equal(5, fixture.Calls.Count);
+    }
+
+    [Theory]
+    [InlineData("continue")]
+    [InlineData("duplicate")]
+    [InlineData("wrong-work")]
+    [InlineData("wrong-namespace")]
+    [InlineData("unexpected-suffix")]
+    [InlineData("out-of-range")]
+    [InlineData("invalid-page-id")]
+    [InlineData("too-many")]
+    public async Task Ambiguous_or_incomplete_portuguese_mapping_is_rejected_without_followup_requests(string mode)
+    {
+        using var fixture = new Fixture("hp5") { MappingMode = mode };
+        var failure = await Assert.ThrowsAsync<GenerationException>(() => fixture.Provider.GetIndexAsync("hp5", default, "pt"));
+        Assert.Equal("source_index_ambiguous", failure.Code);
+        Assert.Equal(3, fixture.Calls.Count);
+    }
+
+    [Theory]
+    [InlineData("rate-limit", "source_rate_limited")]
+    [InlineData("timeout", "source_timeout")]
+    public async Task Portuguese_mapping_operational_failure_stops_before_any_narrative_request(string mode, string code)
+    {
+        using var fixture = new Fixture("hp5") { MappingMode = mode };
+        var failure = await Assert.ThrowsAsync<GenerationException>(() => fixture.Provider.GetIndexAsync("hp5", default, "pt"));
+        Assert.Equal(code, failure.Code);
+        Assert.Equal(3, fixture.Calls.Count);
+        Assert.Equal("pt.wikibooks.org", fixture.Calls[^1].Host);
+    }
+
+    [Theory]
+    [InlineData("pt-missing")]
+    [InlineData("pt-no-synopsis")]
+    [InlineData("pt-extra-analysis")]
+    public async Task Fifth_book_can_fall_back_to_its_indexed_english_chapter_only_for_editorial_absence(string mode)
+    {
+        using var fixture = new Fixture("hp5");
+        var index = await fixture.Provider.GetIndexAsync("hp5", default, "pt");
+        fixture.Mode = mode;
+        var result = await fixture.Provider.GetChapterAsync(index, index.Chapters[0], default);
+        Assert.NotNull(result);
+        Assert.Equal("en", result.Provenance.Language);
+        Assert.Equal("pt.wikibooks.org", fixture.Calls[3].Host);
+        Assert.Equal("en.wikibooks.org", fixture.Calls[^1].Host);
+    }
+
+    [Theory]
+    [InlineData("rate-limit", "source_rate_limited")]
+    [InlineData("timeout", "source_timeout")]
+    [InlineData("invalid-json", "source_invalid_response")]
+    public async Task Fifth_book_does_not_switch_away_from_portuguese_on_operational_errors(string mode, string code)
+    {
+        using var fixture = new Fixture("hp5");
+        var index = await fixture.Provider.GetIndexAsync("hp5", default, "pt");
+        fixture.Mode = mode;
+        var failure = await Assert.ThrowsAsync<GenerationException>(() => fixture.Provider.GetChapterAsync(index, index.Chapters[0], default));
+        Assert.Equal(code, failure.Code);
+        Assert.Equal(4, fixture.Calls.Count);
+        Assert.Equal("pt.wikibooks.org", fixture.Calls[^1].Host);
+    }
+
+    [Fact]
+    public async Task Portuguese_index_can_use_english_directly_when_the_book_prefers_it()
+    {
+        using var fixture = new Fixture();
+        var index = await fixture.Provider.GetIndexAsync("hp1", default, "en");
+        var result = await fixture.Provider.GetChapterAsync(index, index.Chapters[0], default);
+        Assert.NotNull(result);
+        Assert.Equal("en", result.Provenance.Language);
+        Assert.All(fixture.Calls.Skip(2), uri => Assert.Equal("en.wikibooks.org", uri.Host));
         Assert.Equal(4, fixture.Calls.Count);
     }
 
@@ -62,6 +166,15 @@ public sealed class WikibooksNarrativeSourceProviderTests
         using var fixture = new Fixture();
         var failure = await Assert.ThrowsAsync<GenerationException>(() => fixture.Provider.GetIndexAsync("http://localhost/secret", default));
         Assert.Equal("source_unsupported", failure.Code);
+        Assert.Empty(fixture.Calls);
+    }
+
+    [Fact]
+    public async Task Unsupported_language_makes_no_network_request()
+    {
+        using var fixture = new Fixture("hp5");
+        var failure = await Assert.ThrowsAsync<GenerationException>(() => fixture.Provider.GetIndexAsync("hp5", default, "fr"));
+        Assert.Equal("source_language_unsupported", failure.Code);
         Assert.Empty(fixture.Calls);
     }
 
@@ -198,6 +311,8 @@ public sealed class WikibooksNarrativeSourceProviderTests
     private sealed class Fixture : IDisposable
     {
         public string Mode { get; set; } = "normal";
+        public string MappingMode { get; set; } = "normal";
+        public string PortuguesePage => NarrativeSourceCatalog.Find(key)!.PortuguesePage;
         public List<Uri> Calls { get; } = [];
         public string? LastJson { get; private set; }
         public WikibooksNarrativeSourceProvider Provider { get; }
@@ -260,6 +375,33 @@ public sealed class WikibooksNarrativeSourceProviderTests
                 var query = uri.Query.TrimStart('?').Split('&').Select(pair => pair.Split('=', 2))
                     .ToDictionary(pair => pair[0], pair => pair.Length == 2 ? Uri.UnescapeDataString(pair[1]) : "");
                 var english = uri.Host.StartsWith("en.");
+                if (query.GetValueOrDefault("list") == "allpages")
+                {
+                    Assert.False(english);
+                    Assert.Equal(fixture.PortuguesePage + "/Capítulo", query["apprefix"]);
+                    if (fixture.MappingMode == "rate-limit") return new(HttpStatusCode.TooManyRequests);
+                    if (fixture.MappingMode == "timeout") throw new TaskCanceledException();
+                    var pages = new List<object>();
+                    for (var order = 1; order <= (fixture.MappingMode == "too-many" ? 65 : fixture.count); order++)
+                    {
+                        if (fixture.MappingMode == "empty") break;
+                        var title = fixture.PortuguesePage + "/Capítulo " + order;
+                        if (order == 1) title = fixture.MappingMode switch
+                        {
+                            "wrong-work" => "Outra obra/Capítulo 1",
+                            "unexpected-suffix" => fixture.PortuguesePage + "/Capítulo 1/Análise",
+                            "out-of-range" => fixture.PortuguesePage + "/Capítulo 39",
+                            _ => title
+                        };
+                        pages.Add(new { pageid = fixture.MappingMode == "invalid-page-id" ? 0 : 600 + order,
+                            ns = fixture.MappingMode == "wrong-namespace" ? 1 : 0, title });
+                        if (fixture.MappingMode == "duplicate" && order == 1)
+                            pages.Add(new { pageid = 900, ns = 0, title = fixture.PortuguesePage + "/Capítulo1" });
+                    }
+                    if (fixture.MappingMode == "continue")
+                        return fixture.Json(new { @continue = new { apcontinue = "next", @continue = "-||" }, query = new { allpages = pages } });
+                    return fixture.Json(new { batchcomplete = true, query = new { allpages = pages } });
+                }
                 if (query.TryGetValue("page", out var requested) && requested == fixture.page)
                     return fixture.Parse(fixture.Mode == "wrong-index-title" ? "Outra obra" : fixture.page,
                         1000, 100, fixture.Toc(fixture.key == "hp5" ? "Chapters" : "Capítulos", fixture.page, "1"));
@@ -287,8 +429,8 @@ public sealed class WikibooksNarrativeSourceProviderTests
                 }
                 if (fixture.Mode == "both-missing" || !english && fixture.Mode == "pt-missing")
                     return fixture.Json(new { error = new { code = "missingtitle" } });
-                var chapterPage = english ? fixture.key == "hp5" ? fixture.page + "/Chapter 1"
-                    : "Muggles' Guide to Harry Potter/Books/Philosopher's Stone/Chapter 1" : fixture.page + "/Capítulo 1";
+                var chapterPage = english ? NarrativeSourceCatalog.Find(fixture.key)!.EnglishPage + "/Chapter 1"
+                    : fixture.PortuguesePage + "/Capítulo 1";
                 if (query.ContainsKey("page"))
                 {
                     var toc = fixture.Toc(english ? "Synopsis" : fixture.Mode == "pt-no-synopsis" ? "Analysis" : "Sinopse",

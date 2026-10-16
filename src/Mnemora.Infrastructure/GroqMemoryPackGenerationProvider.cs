@@ -27,7 +27,10 @@ public sealed class GroqMemoryPackGenerationProvider(
     private readonly GenerationOptions configuration = options.Value;
 
     private const string Instructions = """
-        Extraia candidatos editoriais antisspoiler em português para a unidade atual. Use apenas seus
+        Extraia candidatos editoriais antisspoiler para a unidade atual no idioma outputLanguage da entrada.
+        pt-BR significa português brasileiro; pt-PT, português europeu; en, inglês. Escreva fatos, rótulos,
+        justificativas e diagnostics nesse idioma, mesmo se a fonte estiver em outro. Não traduza quotes.
+        Use apenas seus
         parágrafos e knownEntities (prefixo aceito). Não recebeu capítulos/títulos futuros.
         Não use memória própria do livro, conhecimento externo ou inferências retrospectivas para completar lacunas.
 
@@ -53,8 +56,11 @@ public sealed class GroqMemoryPackGenerationProvider(
         revelada agora vira alias/fato atual.
 
         Nomes novos são literais na quote atual ou rótulos feitos só com seus termos, sem completar nomes
-        por memória. shortDescription é trecho literal curto de uma única quote atual ou null.
-        memoryHint é trecho literal curto da quote do próprio fato ou null; não amplie nem combine citações.
+        por memória. Preserve nomes próprios e suas formas comprovadas nos parágrafos atuais ou no registro
+        já conhecido. Não faça tradução literal de nomes nem consulte um glossário de identidades futuras.
+        shortDescription é trecho literal curto de uma única quote atual ou null. memoryHint é trecho literal
+        curto da quote do próprio fato ou null. Ambos ficam null se o trecho não estiver em outputLanguage.
+        Não amplie nem combine citações. Os códigos do schema, como Character e Event, permanecem iguais.
 
         Preserve suspeitas e relatos como alegações atribuídas, indicando quem suspeita/afirma. Descoberta
         atual de evento antigo é conhecida agora; não retrodate. Eventos usam entidade/fato de tipo Event.

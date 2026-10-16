@@ -60,8 +60,10 @@ export type GenerationSession = {
   completedUnits: number; totalUnits: number; calls: number; tokens: number; estimatedTokens: number;
   nextAllowedAt: string | null; coverage: GenerationCoverage[]; diagnostics: string[]; hasImportableResult: boolean;
 };
+export type SourcePreparationLanguageSource = "Metadata" | "Title" | "Default";
 export type SourcePreparationAvailability = {
   supported: boolean; reason: string | null; supportedTitles: string[];
+  targetLanguage: string; languageInferred: boolean; languageSource: SourcePreparationLanguageSource;
 };
 export type GenerationAvailability = {
   enabled: boolean; reason: string | null; model: string; maxUnits: number; maxSourceBytes: number;
@@ -90,12 +92,13 @@ export type GenerationResult = {
 export type SourcePreparationUnit = {
   order: number; title: string; status: "Pending" | "Collected" | "MissingSource" | "Failed";
   summaryBytes: number; sourceUrl: string | null; revisionId: string | null;
-  sourceHash: string | null; summaryPreview: string | null;
+  sourceHash: string | null; summaryPreview: string | null; sourceLanguage: string | null;
 };
 export type SourcePreparationStatus = {
   preparationId: string; bookId: string; revision: number;
   state: "Collecting" | "Ready" | "Partial" | "Cancelled";
   sourceBookTitle: string; language: string; sourceUrl: string; attribution: string; license: string;
+  targetLanguage: string; languageInferred: boolean; languageSource: SourcePreparationLanguageSource;
   completedUnits: number; totalUnits: number; units: SourcePreparationUnit[];
   diagnostics: string[]; expiresAt: string; generationRunId: string | null;
 };

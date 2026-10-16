@@ -49,9 +49,10 @@ public sealed class GroqMemoryPackGenerationProviderTests
             Assert.Contains("trecho literal curto", instructions);
             Assert.DoesNotContain(input.Paragraphs[0].Text, instructions);
             using var supplied = JsonDocument.Parse(messages[1].GetProperty("content").GetString()!);
-            Assert.Equal(new[] { "unitSlug", "paragraphs", "knownEntities" },
+            Assert.Equal(new[] { "unitSlug", "paragraphs", "knownEntities", "outputLanguage" },
                 supplied.RootElement.EnumerateObject().Select(property => property.Name).ToArray());
             Assert.Equal(input.UnitSlug, supplied.RootElement.GetProperty("unitSlug").GetString());
+            Assert.Equal("pt-BR", supplied.RootElement.GetProperty("outputLanguage").GetString());
             Assert.Equal(JsonSerializer.Serialize(input, Json),
                 JsonSerializer.Serialize(supplied.RootElement.Deserialize<ChapterInput>(Json), Json));
             Assert.DoesNotContain("Segredo do capítulo futuro", Encoding.UTF8.GetString(bytes));
@@ -83,6 +84,38 @@ public sealed class GroqMemoryPackGenerationProviderTests
         Assert.Equal(23, result.OutputTokens);
         Assert.Equal((requestBytes + 2) / 3 + 128, provider.EstimateInputTokens(input));
         Assert.Equal(1, handler.RequestCount);
+    }
+
+    [Theory]
+    [InlineData("pt-BR")]
+    [InlineData("pt-PT")]
+    [InlineData("en")]
+    public async Task Sends_the_output_language_and_instructs_translation_without_future_name_mappings(string language)
+    {
+        var input = Input() with { OutputLanguage = language };
+        var handler = new StubHandler(async (request, cancellationToken) =>
+        {
+            using var body = JsonDocument.Parse(await request.Content!.ReadAsByteArrayAsync(cancellationToken));
+            var messages = body.RootElement.GetProperty("messages");
+            var instructions = messages[0].GetProperty("content").GetString()!;
+            using var supplied = JsonDocument.Parse(messages[1].GetProperty("content").GetString()!);
+
+            Assert.Equal(language, supplied.RootElement.GetProperty("outputLanguage").GetString());
+            Assert.Contains("pt-BR significa português brasileiro", instructions, StringComparison.Ordinal);
+            Assert.Contains("idioma outputLanguage", instructions, StringComparison.Ordinal);
+            Assert.Contains("Não traduza quotes", instructions, StringComparison.Ordinal);
+            Assert.Contains("Não faça tradução literal de nomes", instructions, StringComparison.Ordinal);
+            Assert.Contains("glossário de identidades futuras", instructions, StringComparison.Ordinal);
+            Assert.Contains("já conhecido", instructions, StringComparison.Ordinal);
+            Assert.DoesNotContain(input.Paragraphs[0].Text, instructions, StringComparison.Ordinal);
+            return Response(Envelope(ExtractionJson()));
+        });
+        using var client = new HttpClient(handler);
+
+        await Provider(client).ExtractAsync(input, CancellationToken.None);
+
+        Assert.Equal(1, handler.RequestCount);
+        Assert.Equal("generation-v3", GenerationPrompt.Version);
     }
 
     [Theory]

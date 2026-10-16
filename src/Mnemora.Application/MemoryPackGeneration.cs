@@ -7,7 +7,7 @@ namespace Mnemora.Application;
 
 public static class GenerationPrompt
 {
-    public const string Version = "generation-v2";
+    public const string Version = "generation-v3";
 }
 
 public sealed class GenerationOptions
@@ -55,7 +55,8 @@ public sealed record GenerationKnownEntity(string Slug, string Type, string Name
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record ChapterInput(string UnitSlug,
     IReadOnlyList<GenerationParagraph> Paragraphs,
-    IReadOnlyList<GenerationKnownEntity> KnownEntities);
+    IReadOnlyList<GenerationKnownEntity> KnownEntities,
+    string OutputLanguage = "pt-BR");
 
 [JsonUnmappedMemberHandling(JsonUnmappedMemberHandling.Disallow)]
 public sealed record GenerationEvidence(string ParagraphId, string Quote, string Justification);

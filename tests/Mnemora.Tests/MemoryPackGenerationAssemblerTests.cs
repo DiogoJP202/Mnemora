@@ -16,6 +16,34 @@ public sealed class MemoryPackGenerationAssemblerTests
         new("A assinatura", "A mascarada diz: Meu nome é Íria.\n\nO diário relata a Queda da Ponte de Sal, ocorrida sete anos antes.")
     ];
 
+    [Theory]
+    [InlineData("Harry Potter e a Ordem da Fênix", null, "pt-BR", true)]
+    [InlineData("Harry Potter and the Order of the Phoenix", null, "en", true)]
+    [InlineData("Harry Potter e a Pedra Filosofal", null, "pt-BR", true)]
+    [InlineData("Harry Potter and the Philosopher's Stone", null, "en", true)]
+    [InlineData("Harry Potter e a Ordem da Fênix", "pt-PT", "pt-PT", false)]
+    [InlineData("Harry Potter e a Ordem da Fênix", "en", "en", false)]
+    [InlineData("Harry Potter and the Order of the Phoenix", "pt-BR", "pt-BR", false)]
+    [InlineData("Uma obra fictícia", "fr", "fr", false)]
+    public void Input_uses_identified_output_language_without_rewriting_the_bibliographic_identity(
+        string title, string? language, string expectedLanguage, bool inferred)
+    {
+        var book = new MemoryPackBook(title, "J. K. Rowling", Language: language);
+        var document = assembler.Create(book,
+            new(Sources, "Fonte fictícia de teste.", EditionConfirmed: true, IndexComplete: true));
+
+        var input = assembler.BuildInput(document, Sources[0], 0);
+
+        Assert.Equal(expectedLanguage, input.OutputLanguage);
+        Assert.Equal(expectedLanguage, NarrativeSourceCatalog.GetLanguage(book).Language);
+        Assert.Equal(inferred, NarrativeSourceCatalog.GetLanguage(book).Inferred);
+        Assert.Same(book, document.Book);
+        Assert.Equal(language, document.Book.Language);
+        var json = JsonSerializer.Serialize(document, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        Assert.DoesNotContain("outputLanguage", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("inferred", json, StringComparison.Ordinal);
+    }
+
     [Fact]
     public void Creates_exact_edition_and_neutral_outline_without_v1_extensions()
     {

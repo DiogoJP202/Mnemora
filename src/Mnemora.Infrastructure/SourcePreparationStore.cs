@@ -135,7 +135,8 @@ public sealed class SourcePreparationStore(TimeProvider clock)
         s.Sources[s.Cursor] = bytes;
         s.UnitStates[s.Cursor] = source is null ? "MissingSource" : "Collected";
         if (source is null) AddDiagnostics(s, [$"Capítulo {chapter.Order}: não foi encontrada uma sinopse utilizável. A lacuna foi preservada."]);
-        else if (source.Provenance.Language != "pt") AddDiagnostics(s, [$"Capítulo {chapter.Order}: fonte em {source.Provenance.Language}; nomes e tradução precisam de revisão."]);
+        else if (s.Index.PreferredLanguage == "pt" && source.Provenance.Language != "pt")
+            AddDiagnostics(s, ["Algumas sinopses só estavam disponíveis em inglês. O conteúdo gerado será solicitado no idioma de destino; confira os nomes próprios e as evidências dessas unidades no relatório."]);
         s.Cursor++; s.Revision++; s.Touched = clock.GetUtcNow();
         if (s.Cursor == s.Sources.Length) s.State = s.UnitStates.All(state => state == "Collected") ? "Ready" : "Partial";
         var status = Status(s);
@@ -252,11 +253,13 @@ public sealed class SourcePreparationStore(TimeProvider clock)
             var text = source?.Text;
             return new SourcePreparationUnit(chapter.Order, chapter.Title, s.UnitStates[i], Encoding.UTF8.GetByteCount(text ?? ""),
                 source?.Provenance.Url, source?.Provenance.RevisionId, source?.Provenance.SourceHash,
-                text is null ? null : text[..Math.Min(160, text.Length)]);
+                text is null ? null : text[..Math.Min(160, text.Length)], source?.Provenance.Language);
         }).ToArray() ?? [];
+        var language = NarrativeSourceCatalog.GetLanguage(s.Book);
         return new(s.Id, s.BookId, s.Revision, s.State, s.Index?.Book.Title ?? "Wikibooks", s.Index?.Book.Language ?? "pt",
             s.Index?.SourceUrl ?? "", Attribution, s.Index?.Book.License ?? "CC BY-SA 4.0", s.Cursor, units.Count,
-            units, [.. s.Diagnostics], Min(s.Touched.AddMinutes(30), s.Created.AddHours(2)), s.GenerationRunId);
+            units, [.. s.Diagnostics], Min(s.Touched.AddMinutes(30), s.Created.AddHours(2)), s.GenerationRunId,
+            language.Language, language.Inferred, language.Source);
     }
     public const string Attribution = "Colaboradores do Wikibooks — CC BY-SA 4.0 (https://creativecommons.org/licenses/by-sa/4.0/). Sinopses organizadas por capítulo; extração/tradução assistida. Revisões e créditos por unidade no relatório.";
     private T Access<T>(Func<T> operation)

@@ -22,7 +22,16 @@ public sealed class SourcePreparationService(SourcePreparationStore store, IBook
         cancellation.CancelAfter(TimeSpan.FromSeconds(25));
         try
         {
-            var index = await provider.GetIndexAsync(key, cancellation.Token);
+            var preferred = NarrativeSourceCatalog.GetLanguage(book).Language.StartsWith("pt", StringComparison.OrdinalIgnoreCase)
+                ? "pt" : "en";
+            var index = await provider.GetIndexAsync(key, cancellation.Token, preferred);
+            index = index with
+            {
+                PreferredLanguage = preferred,
+                Chapters = preferred == "pt" && index.Book.Language != "pt"
+                    ? index.Chapters.Select(chapter => chapter with { Title = $"Capítulo {chapter.Order}" }).ToArray()
+                    : index.Chapters
+            };
             await CheckTargetAsync(owner, bookId, lease.PreparationId, cancellation.Token);
             return store.SetIndex(lease, index);
         }

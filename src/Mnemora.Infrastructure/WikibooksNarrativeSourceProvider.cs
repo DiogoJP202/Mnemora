@@ -25,9 +25,13 @@ public sealed class WikibooksNarrativeSourceProvider(Func<string, HttpClient> cr
         RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
     private static readonly Regex HiddenStyle = new(@"(?:display\s*:\s*none|visibility\s*:\s*hidden)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking);
-    public async Task<NarrativeSourceIndex> GetIndexAsync(string bookKey, CancellationToken cancellationToken)
+    public async Task<NarrativeSourceIndex> GetIndexAsync(string bookKey, CancellationToken cancellationToken,
+        string? preferredLanguage = null)
     {
         var work = WorkFor(bookKey);
+        var preferred = preferredLanguage ?? work.IndexLanguage;
+        if (preferred is not ("pt" or "en"))
+            throw Failure("source_language_unsupported", "O idioma de coleta não é suportado.", 400);
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         deadline.CancelAfter(TimeSpan.FromSeconds(25));
         try
@@ -42,10 +46,17 @@ public sealed class WikibooksNarrativeSourceProvider(Func<string, HttpClient> cr
             {
                 if (content is null) throw Failure("source_index_missing", "A seção do índice público não está disponível.");
                 var chapters = ParseIndex(Html(content), page, work.ChapterCount, language);
+                if (work.Key == "hp5" && preferred == "pt")
+                {
+                    var portuguesePages = await PortugueseChapterPagesAsync(work, deadline.Token);
+                    chapters = chapters.Select(chapter => chapter with
+                    { PortuguesePageTitle = portuguesePages.GetValueOrDefault(chapter.Order) }).ToArray();
+                }
                 return new(new(bookKey, work.Title, page, language, License), chapters,
                     metadata.Revision, SourceUrl(language, page, metadata.Revision, heading),
                     ["Índice do guia comunitário, não do ISBN cadastrado. Confira a correspondência com a tradução e a edição.",
-                     "Somente Sinopse/Synopsis será coletada. Análises e páginas de personagens não são usadas; a revisão editorial continua necessária."]);
+                     "Somente Sinopse/Synopsis será coletada. Análises e páginas de personagens não são usadas; a revisão editorial continua necessária."],
+                    PreferredLanguage: preferred);
             }
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
@@ -57,8 +68,11 @@ public sealed class WikibooksNarrativeSourceProvider(Func<string, HttpClient> cr
     {
         var work = WorkFor(index.Book.Key);
         if (index.Book.IndexPage != work.IndexPage || index.Book.Language != work.IndexLanguage
+            || index.PreferredLanguage is not ("pt" or "en")
             || chapter.Order < 1 || chapter.Order > work.ChapterCount
             || !MatchesChapter(chapter.PageTitle, work.IndexPage, chapter.Order)
+            || chapter.PortuguesePageTitle is { } mappedPage
+                && !MatchesPortugueseChapter(mappedPage, work.PortuguesePage, chapter.Order)
             || index.Chapters.Count != work.ChapterCount
             || !index.Chapters.Any(item => item == chapter))
             throw Failure("source_identity_mismatch", "O capítulo não pertence ao índice permitido.", 409);
@@ -66,16 +80,50 @@ public sealed class WikibooksNarrativeSourceProvider(Func<string, HttpClient> cr
         deadline.CancelAfter(TimeSpan.FromSeconds(25));
         try
         {
-            if (work.IndexLanguage == "en")
-                return await ChapterAsync("en", chapter.PageTitle, "Synopsis", chapter, deadline.Token);
-            var collected = await ChapterAsync("pt", chapter.PageTitle, "Sinopse", chapter, deadline.Token);
+            var englishPage = work.IndexLanguage == "en" ? chapter.PageTitle
+                : $"{work.EnglishPage}/Chapter {chapter.Order}";
+            if (index.PreferredLanguage == "en")
+                return await ChapterAsync("en", englishPage, "Synopsis", chapter, deadline.Token);
+            var portuguesePage = work.IndexLanguage == "pt" ? chapter.PageTitle : chapter.PortuguesePageTitle;
+            var collected = portuguesePage is null ? null
+                : await ChapterAsync("pt", portuguesePage, "Sinopse", chapter, deadline.Token);
             // Missing pages/sections or unusable editorial markup can fall back to
             // the same numbered chapter. Operational failures never change source.
-            return collected ?? await ChapterAsync("en", $"{work.EnglishPage}/Chapter {chapter.Order}",
+            return collected ?? await ChapterAsync("en", englishPage,
                 "Synopsis", chapter, deadline.Token);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         { throw Failure("source_timeout", "A coleta do capítulo excedeu o tempo disponível; o progresso anterior foi preservado.", 504); }
+    }
+
+    private async Task<IReadOnlyDictionary<int, string>> PortugueseChapterPagesAsync(
+        NarrativeSourceDefinition work, CancellationToken token)
+    {
+        // The English index is authoritative. This single bounded listing only
+        // confirms which Portuguese chapter pages actually exist; it never creates units.
+        using var response = await ReadResponseAsync("pt",
+            $"action=query&list=allpages&apprefix={Uri.EscapeDataString(work.PortuguesePage + "/Capítulo")}&apnamespace=0&aplimit=65", token);
+        if (response is null) throw Failure("source_invalid_response", "A listagem de capítulos em português não pôde ser confirmada.");
+        var root = response.Document.RootElement;
+        if (root.TryGetProperty("continue", out _)
+            || !root.TryGetProperty("query", out var query) || query.ValueKind != JsonValueKind.Object
+            || !query.TryGetProperty("allpages", out var pages) || pages.ValueKind != JsonValueKind.Array
+            || pages.GetArrayLength() > 64)
+            throw Failure("source_index_ambiguous", "A listagem de capítulos em português é incompleta ou ambígua; nenhuma página foi presumida.");
+        var result = new Dictionary<int, string>();
+        foreach (var item in pages.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object || String(item, "title") is not { } page
+                || !item.TryGetProperty("pageid", out var pageId) || pageId.ValueKind != JsonValueKind.Number || !pageId.TryGetInt64(out var id) || id <= 0
+                || !item.TryGetProperty("ns", out var ns) || ns.ValueKind != JsonValueKind.Number || !ns.TryGetInt32(out var space) || space != 0
+                || !page.StartsWith(work.PortuguesePage + "/Capítulo", StringComparison.Ordinal))
+                throw Failure("source_index_ambiguous", "A listagem contém uma página fora da origem permitida.");
+            var match = ChapterSuffix.Match(page[(work.PortuguesePage.Length + 1)..]);
+            if (!match.Success || !int.TryParse(match.Groups[1].Value, out var order)
+                || order < 1 || order > work.ChapterCount || !result.TryAdd(order, page))
+                throw Failure("source_index_ambiguous", "A listagem contém capítulos duplicados ou sem correspondência no índice confirmado.");
+        }
+        return result;
     }
 
     private async Task<CollectedNarrativeSource?> ChapterAsync(string language, string page, string heading,
@@ -127,6 +175,24 @@ public sealed class WikibooksNarrativeSourceProvider(Func<string, HttpClient> cr
 
     private async Task<Snapshot?> ReadAsync(string language, string query, CancellationToken token)
     {
+        var response = await ReadResponseAsync(language, query, token);
+        if (response is null) return null;
+        try
+        {
+            var root = response.Document.RootElement;
+            if (!root.TryGetProperty("parse", out var parse) || parse.ValueKind != JsonValueKind.Object
+                || !parse.TryGetProperty("revid", out var revision) || revision.ValueKind != JsonValueKind.Number || !revision.TryGetInt64(out var revisionId) || revisionId <= 0
+                || !parse.TryGetProperty("pageid", out var page) || page.ValueKind != JsonValueKind.Number || !page.TryGetInt64(out var pageId) || pageId <= 0
+                || String(parse, "title") is not { Length: > 0 } title)
+                throw Failure("source_invalid_response", "A fonte pública retornou uma resposta inválida.");
+            return new(response.Document, title, revisionId.ToString(CultureInfo.InvariantCulture),
+                pageId.ToString(CultureInfo.InvariantCulture), response.Hash, response.RetrievedAt);
+        }
+        catch { response.Dispose(); throw; }
+    }
+
+    private async Task<SourceResponse?> ReadResponseAsync(string language, string query, CancellationToken token)
+    {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
         timeout.CancelAfter(TimeSpan.FromSeconds(8));
         using var client = createClient($"narrative-wikibooks-{language}");
@@ -169,13 +235,7 @@ public sealed class WikibooksNarrativeSourceProvider(Func<string, HttpClient> cr
                         throw new GenerationException("source_rate_limited", "A fonte pública pediu uma pausa antes da próxima consulta.", 429, RetryAfter(response));
                     throw new JsonException();
                 }
-                if (!root.TryGetProperty("parse", out var parse) || parse.ValueKind != JsonValueKind.Object
-                    || !parse.TryGetProperty("revid", out var revision) || revision.ValueKind != JsonValueKind.Number || !revision.TryGetInt64(out var revisionId) || revisionId <= 0
-                    || !parse.TryGetProperty("pageid", out var page) || page.ValueKind != JsonValueKind.Number || !page.TryGetInt64(out var pageId) || pageId <= 0
-                    || String(parse, "title") is not { Length: > 0 } title)
-                    throw new JsonException();
-                return new(document, title, revisionId.ToString(CultureInfo.InvariantCulture),
-                    pageId.ToString(CultureInfo.InvariantCulture), Hash(bytes), clock.GetUtcNow());
+                return new(document, Hash(bytes), clock.GetUtcNow());
             }
             catch { document.Dispose(); throw; }
         }
@@ -283,6 +343,8 @@ public sealed class WikibooksNarrativeSourceProvider(Func<string, HttpClient> cr
     private static bool MatchesChapter(string page, string prefix, int order) => page.StartsWith(prefix + "/", StringComparison.Ordinal)
         && ChapterSuffix.Match(page[(prefix.Length + 1)..]) is { Success: true } match
         && int.TryParse(match.Groups[1].Value, out var number) && number == order;
+    private static bool MatchesPortugueseChapter(string page, string prefix, int order) =>
+        page.StartsWith(prefix + "/Capítulo", StringComparison.Ordinal) && MatchesChapter(page, prefix, order);
     private static NarrativeSourceDefinition WorkFor(string key) => NarrativeSourceCatalog.Find(key)
         ?? throw Failure("source_unsupported", "Ainda não há um coletor por capítulo para esta obra.", 400);
     private static string Html(Snapshot snapshot) => String(snapshot.Document.RootElement.GetProperty("parse"), "text")
@@ -298,5 +360,7 @@ public sealed class WikibooksNarrativeSourceProvider(Func<string, HttpClient> cr
     private static GenerationException Failure(string code, string message, int status = 502) => new(code, message, status);
     private sealed record Snapshot(JsonDocument Document, string Title, string Revision, string PageId,
         string Hash, DateTimeOffset RetrievedAt) : IDisposable
+    { public void Dispose() => Document.Dispose(); }
+    private sealed record SourceResponse(JsonDocument Document, string Hash, DateTimeOffset RetrievedAt) : IDisposable
     { public void Dispose() => Document.Dispose(); }
 }

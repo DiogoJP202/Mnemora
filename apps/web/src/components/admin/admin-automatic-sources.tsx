@@ -16,6 +16,8 @@ const button = "min-h-11 rounded-lg border border-[var(--line)] px-4 py-2 text-s
 const primary = `${button} bg-[var(--action-surface)] text-[var(--action-text)]`;
 const stateLabels = { Collecting: "Coletando fontes", Ready: "Fontes prontas para conferência", Partial: "Coleta parcial", Cancelled: "Coleta cancelada" };
 const unitLabels = { Pending: "Aguardando coleta", Collected: "Resumo coletado", MissingSource: "Sem resumo disponível", Failed: "Falha na coleta" };
+const languageLabels: Record<string, string> = { "pt-br": "Português (Brasil)", pt: "Português", por: "Português", "pt-pt": "Português (Portugal)", en: "Inglês", eng: "Inglês", es: "Espanhol", spa: "Espanhol" };
+const languageLabel = (language: string) => languageLabels[language.toLowerCase()] ?? language;
 function message(cause: unknown) {
   if (cause instanceof ApiResponseError && cause.status === 429) {
     const sourceMessage = cause.code ? `${cause.message} ` : "";
@@ -57,6 +59,13 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
   const missing = preparation?.units.some((unit) => unit.status !== "Collected") ?? false;
   const hasSummary = preparation?.units.some((unit) => unit.summaryBytes > 0) ?? false;
   const partial = missing || !indexComplete || preparation?.state === "Partial" || preparation?.state === "Cancelled";
+  const targetLanguage = preparation?.targetLanguage ?? availability?.targetLanguage;
+  const languageSource = preparation?.languageSource ?? availability?.languageSource;
+  const targetLanguageOrigin = languageSource === "Title" ? "identificado pelo título" : languageSource === "Metadata" ? "informado no cadastro" : "padrão do aplicativo";
+  const collectedLanguages = new Map<string, number>();
+  for (const unit of preparation?.units ?? []) {
+    if (unit.summaryBytes > 0 && unit.sourceLanguage) collectedLanguages.set(unit.sourceLanguage, (collectedLanguages.get(unit.sourceLanguage) ?? 0) + 1);
+  }
 
   function update(updated: SourcePreparationStatus) {
     preparationRef.current = updated;
@@ -200,13 +209,14 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
     <section aria-labelledby="automatic-sources-title" className="mt-5 min-w-0 rounded-xl border border-[var(--line)] bg-[var(--paper)] p-4">
       <h3 id="automatic-sources-title" className="text-xl font-semibold">Buscar capítulos e resumos automaticamente</h3>
       <p className="mt-2 text-sm text-[var(--ink-soft)]">O serviço procura uma fonte pública compatível, coleta os resumos em ordem e os entrega à IA para organizar o pacote. Você acompanha a cobertura e revisa o rascunho antes da importação.</p>
-      <p className="mt-2 text-sm text-[var(--ink-soft)]">A cobertura depende da obra e da fonte disponível. Nesta etapa, os resumos podem estar em inglês; confira a tradução dos nomes e a correspondência com sua edição. As telas de revisão podem conter spoilers do livro inteiro.</p>
+      <p className="mt-2 text-sm text-[var(--ink-soft)]">A cobertura depende da obra e da fonte disponível. Para livros em português, o serviço prioriza sinopses em português e usa inglês como alternativa quando necessário. A geração segue o idioma de destino; confira os nomes e a correspondência com sua edição. As telas de revisão podem conter spoilers do livro inteiro.</p>
       <div className="mt-3 rounded-lg border border-[var(--line)] p-3 text-sm">
         {availability ? <>
           <p className="font-semibold">Obras com coleta automática disponível</p>
           <ul className="mt-2 list-disc space-y-1 pl-5">{availability.supportedTitles.map((title) => <li key={title}>{title}</li>)}</ul>
           <p role="status" className="mt-3">{availability.supported ? "Este livro está coberto pela coleta automática. Confira a correspondência com sua edição antes de gerar." : availability.reason ?? "Este livro ainda não possui coleta automática. Use a entrada manual abaixo."}</p>
         </> : <p role="status">Verificando se este livro tem coleta automática disponível…</p>}
+        {targetLanguage && <p className="mt-3">Idioma de destino: <strong>{languageLabel(targetLanguage)}</strong> · {targetLanguageOrigin}.</p>}
       </div>
       {loading && <p role="status" className="mt-3 text-sm">Verificando preparação anterior…</p>}
       {error && <p role="alert" className="form-alert mt-3 rounded-lg border p-3 text-sm">{error}</p>}
@@ -215,8 +225,10 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
       {!preparation && <button type="button" disabled={formDisabled || !canStartCollection} className={`${primary} mt-4`} onClick={() => void collect()}>{working === "collect" ? "Buscando fontes…" : "Buscar e preparar fontes"}</button>}
       {preparation && <div className="mt-4 min-w-0">
         <p role="status" className="font-semibold">{stateLabels[preparation.state]}</p>
-        <p className="mt-2 break-words text-sm">Obra da fonte: <strong>{preparation.sourceBookTitle}</strong> · idioma {preparation.language}</p>
+        <p className="mt-2 break-words text-sm">Obra da fonte: <strong>{preparation.sourceBookTitle}</strong></p>
+        <p className="mt-2 text-sm">Idioma do índice: {languageLabel(preparation.language)}. Os idiomas das sinopses podem ser diferentes; a saída segue o idioma de destino.</p>
         <p className="mt-2 text-sm">{preparation.completedUnits} de {preparation.totalUnits} capítulos consultados. {preparation.units.filter((unit) => unit.summaryBytes > 0).length} com resumo.</p>
+        {collectedLanguages.size > 0 && <p className="mt-2 text-sm">Idiomas das sinopses coletadas: {Array.from(collectedLanguages, ([language, count]) => `${count} em ${languageLabel(language)}`).join(" · ")}.</p>}
         <progress value={preparation.completedUnits} max={Math.max(1, preparation.totalUnits)} aria-label="Capítulos consultados" className="mt-3 w-full accent-[var(--olive)]" />
         <p className="mt-2 break-words text-xs text-[var(--ink-soft)]">{preparation.attribution} · {preparation.license}</p>
         {preparation.sourceUrl && <a href={preparation.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-11 items-center break-all text-sm underline">Abrir fonte dos resumos</a>}
@@ -224,6 +236,7 @@ export function AdminAutomaticSources({ book, disabled, availability, onWorkingC
           <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">Conferir capítulos, resumos e lacunas ({preparation.units.length})</summary>
           <ol className="mt-2 grid max-h-96 gap-3 overflow-auto text-sm">{preparation.units.map((unit) => <li key={unit.order} className="min-w-0 border-t border-[var(--line)] pt-3">
             <p className="break-words"><strong>{unit.order}. {unit.title}</strong> · {unitLabels[unit.status] ?? unit.status}</p>
+            {unit.sourceLanguage && <p className="mt-1 text-xs text-[var(--ink-soft)]">Idioma da sinopse: {languageLabel(unit.sourceLanguage)}</p>}
             {unit.summaryPreview && <p className="mt-2 whitespace-pre-wrap break-words text-[var(--ink-soft)]">{unit.summaryPreview}</p>}
             {unit.sourceUrl && <a href={unit.sourceUrl} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-11 items-center break-all underline">Fonte do capítulo</a>}
             {unit.sourceHash && <p className="mt-1 break-all text-xs text-[var(--ink-soft)]">SHA-256: {unit.sourceHash}{unit.revisionId ? ` · revisão ${unit.revisionId}` : ""}</p>}

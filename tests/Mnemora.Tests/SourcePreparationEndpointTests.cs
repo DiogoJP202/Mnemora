@@ -21,6 +21,52 @@ namespace Mnemora.Tests;
 
 public sealed class SourcePreparationEndpointTests
 {
+    [Fact]
+    public async Task Missing_language_is_inferred_from_portuguese_title_and_foreign_source_warning_is_grouped()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        await fixture.WithDb(async db =>
+        {
+            var book = await db.Books.SingleAsync(book => book.Id == fixture.BookId);
+            book.Title = "Harry Potter e a Ordem da Fênix";
+            book.Language = null;
+            await db.SaveChangesAsync();
+        });
+        var availability = await Read(await fixture.Admin.GetAsync(fixture.GenerationPath("availability")));
+        Assert.Equal("pt-BR", availability["automaticSources"]!["targetLanguage"]!.GetValue<string>());
+        Assert.Equal("Title", availability["automaticSources"]!["languageSource"]!.GetValue<string>());
+        var status = await fixture.CollectAsync();
+        Assert.Equal("pt-BR", status["targetLanguage"]!.GetValue<string>());
+        Assert.True(status["languageInferred"]!.GetValue<bool>());
+        Assert.Equal("Title", status["languageSource"]!.GetValue<string>());
+        Assert.Equal("pt", fixture.Sources.LastChapterIndex!.PreferredLanguage);
+        Assert.Equal("Capítulo 1", status["units"]![0]!["title"]!.GetValue<string>());
+        Assert.Equal("en", status["units"]![0]!["sourceLanguage"]!.GetValue<string>());
+        Assert.Single(status["diagnostics"]!.AsArray(), item => item!.GetValue<string>().Contains("Algumas sinopses"));
+        Assert.DoesNotContain(status["diagnostics"]!.AsArray(), item => item!.GetValue<string>().Contains("Capítulo 1: fonte em"));
+        await fixture.WithDb(async db => Assert.Null((await db.Books.SingleAsync(book => book.Id == fixture.BookId)).Language));
+        Assert.Equal(0, fixture.Generation.Calls);
+    }
+
+    [Fact]
+    public async Task Explicit_edition_language_wins_over_portuguese_title_without_a_foreign_source_warning()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        await fixture.WithDb(async db =>
+        {
+            var book = await db.Books.SingleAsync(book => book.Id == fixture.BookId);
+            book.Language = "en";
+            await db.SaveChangesAsync();
+        });
+        var status = await fixture.CollectAsync();
+        Assert.Equal("en", status["targetLanguage"]!.GetValue<string>());
+        Assert.False(status["languageInferred"]!.GetValue<bool>());
+        Assert.Equal("Metadata", status["languageSource"]!.GetValue<string>());
+        Assert.Equal("en", fixture.Sources.LastChapterIndex!.PreferredLanguage);
+        Assert.DoesNotContain(status["diagnostics"]!.AsArray(), item => item!.GetValue<string>().Contains("Algumas sinopses"));
+        Assert.Equal(0, fixture.Generation.Calls);
+    }
+
     [Theory]
     [InlineData("Harry Potter e a Ordem da Fênix")]
     [InlineData("Harry Potter and the Order of the Phoenix")]
@@ -637,9 +683,10 @@ public sealed class SourcePreparationEndpointTests
         public int? FailOrder { get; set; }
         public bool BlockChapter { get; set; }
         public List<string> RequestedKeys { get; } = [];
+        public NarrativeSourceIndex? LastChapterIndex { get; private set; }
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        public Task<NarrativeSourceIndex> GetIndexAsync(string bookKey, CancellationToken cancellationToken)
+        public Task<NarrativeSourceIndex> GetIndexAsync(string bookKey, CancellationToken cancellationToken, string? preferredLanguage = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Interlocked.Increment(ref indexCalls);
@@ -654,6 +701,7 @@ public sealed class SourcePreparationEndpointTests
         public async Task<CollectedNarrativeSource?> GetChapterAsync(NarrativeSourceIndex index,
             NarrativeChapter chapter, CancellationToken cancellationToken)
         {
+            LastChapterIndex = index;
             Interlocked.Increment(ref chapterCalls);
             if (BlockChapter)
             {

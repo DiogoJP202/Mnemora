@@ -59,7 +59,7 @@ public sealed class MemoryPackGenerationAssembler(GenerationOptions? options = n
                 entity.ShortDescription, entity.Aliases.Where(alias =>
                         order.TryGetValue(alias.RevealAtUnitSlug, out var reveal) && reveal < unit.OrderIndex)
                     .Select(alias => alias.Alias).ToArray())).ToArray();
-        return new(unit.Slug, paragraphs, known);
+        return new(unit.Slug, paragraphs, known, NarrativeSourceCatalog.GetLanguage(document.Book).Language);
     }
 
     public GenerationAssemblyResult Apply(MemoryPackDocument document, ChapterInput input,
