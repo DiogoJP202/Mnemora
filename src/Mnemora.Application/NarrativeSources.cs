@@ -24,3 +24,5 @@ public sealed record SourcePreparationStatus(Guid PreparationId, Guid BookId, in
     IReadOnlyList<string> Diagnostics, DateTimeOffset ExpiresAt, Guid? GenerationRunId);
 public sealed record SourcePreparationGenerateRequest(Guid OperationId, int ExpectedRevision,
     bool EditionConfirmed, bool IndexComplete);
+public sealed record SourcePreparationAvailability(bool Supported, string? Reason,
+    IReadOnlyList<string> SupportedTitles);

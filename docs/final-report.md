@@ -37,7 +37,7 @@ Este relatório foi atualizado em 16 de outubro de 2026, com a entrega da fase 2
 | 23 — Busca administrativa | `375587e` | Busca por título/autor/ISBN, confirmação, importação compartilhada e levantamento de fontes dos três primeiros Harry Potter |
 | 24 — Descoberta de fontes | `cdb2cc2` | Sumário da edição, Wikidata, links da Wikipedia, correspondência bibliográfica, procedência e lacunas |
 | Configuração persistente e extração | `944cf6f` | User secrets local, diagnóstico no Admin e prompt incremental v2 |
-| 25 — Fontes automáticas por capítulo | Commit `phase 25: prepare narrative sources automatically` | Wikibooks para três Harry Potter, coleta incremental protegida, procedência/licença, geração sem resumos manuais e créditos públicos seguros |
+| 25 — Fontes automáticas por capítulo | `e74f77a` | Wikibooks para três Harry Potter, coleta incremental protegida, procedência/licença, geração sem resumos manuais e créditos públicos seguros |
 
 ## Funcionalidades entregues
 
@@ -281,6 +281,14 @@ Não houve migration, gravação de conteúdo editorial ou publicação. São no
 O Admin agora usa **Buscar e preparar fontes** para obter índice e sinopses dos três primeiros Harry Potter no Wikibooks. A seleção é por obra conhecida e autoria, com confirmação explícita de edição; o coletor lê somente Sinopse/Synopsis, fixa revisões, conserva lacunas e não segue links de personagens. A geração recebe fontes do backend sem copiar resumos ou montar JSON. Evidências e licença seguem em relatório separado; importação em rascunho e publicação manual continuam.
 
 Foram aprovados 315 testes de backend, 40 testes de PWA/segurança, lint e build. O navegador coletou as 17 sinopses de Pedra Filosofal com APIs reais, processou-as com IA fictícia e validou/importou o pacote de teste em rascunho, sem publicação. Os três índices (17/18/22) e seis sinopses iniciais/finais também foram conferidos contra APIs reais. Cancelamento e layout a 360 px em claro/escuro foram verificados. A coleta não consumiu Groq; esse teste não mede qualidade editorial ou tokens de um livro inteiro. Veja [operação, limites e evidências](automatic-sources.md).
+
+#### Correção de cobertura — Ordem da Fênix
+
+O primeiro uso real tentou o quinto volume, fora da lista inicial. Foi incluído `hp5`, com índice inglês verificado de 38 capítulos e somente suas seções `Synopsis`: o índice equivalente em português está ausente. Um catálogo único governa identificação por título/autoria, origens permitidas, disponibilidade e créditos públicos seguros. A tela lista a cobertura antes do clique e bloqueia o início de obras sem suporte; a alternativa manual permanece disponível.
+
+Os testes de backend passaram de 315 para 337, cobrindo início pelos títulos PT/EN, disponibilidade sem chamadas externas, obra não suportada sem acesso ao provedor, integridade do índice inglês e créditos restritos à URL conhecida. Lint e build também passaram. O teste de 38 unidades revelou o limite interno de 30 escritas por minuto; a coleta passa a espaçar as etapas, sem remover a quota nem repetir falhas automaticamente.
+
+Após o ajuste, uma nova coleta real no navegador completou **38/38 sinopses**, sem erro ou repetição. O ambiente usou Next.js de produção em `3019`, API e banco descartáveis em `5198` e proxy de QA em `3018`. Não houve chamada Groq, geração, importação ou publicação desse livro. Os serviços reais em `3000`/`5100` permanecem disponíveis com a correção local; os processos de QA são encerrados depois da verificação.
 
 ## Roteiro de aceite reproduzível
 

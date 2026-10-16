@@ -21,6 +21,82 @@ namespace Mnemora.Tests;
 
 public sealed class SourcePreparationEndpointTests
 {
+    [Theory]
+    [InlineData("Harry Potter e a Ordem da Fênix")]
+    [InlineData("Harry Potter and the Order of the Phoenix")]
+    public async Task Fifth_book_saved_in_the_catalog_starts_its_own_source_collection_without_generation(string title)
+    {
+        using var fixture = await Fixture.CreateAsync();
+        await fixture.WithDb(async db =>
+        {
+            var book = await db.Books.SingleAsync(book => book.Id == fixture.BookId);
+            book.Title = title;
+            await db.SaveChangesAsync();
+        });
+
+        var status = await fixture.StartAsync();
+
+        Assert.Equal("Collecting", status["state"]!.GetValue<string>());
+        Assert.Equal(new[] { "hp5" }, fixture.Sources.RequestedKeys);
+        Assert.Equal(1, fixture.Sources.IndexCalls);
+        Assert.Equal(0, fixture.Sources.ChapterCalls);
+        Assert.Equal(0, fixture.Generation.Calls);
+        await fixture.AssertNoEditorialContentAsync();
+    }
+
+    [Fact]
+    public async Task Automatic_source_availability_recognizes_the_fifth_book_without_any_provider_call()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        await fixture.WithDb(async db =>
+        {
+            var book = await db.Books.SingleAsync(book => book.Id == fixture.BookId);
+            book.Title = "Harry Potter e a Ordem da Fênix";
+            await db.SaveChangesAsync();
+        });
+
+        var response = await fixture.Admin.GetAsync(fixture.GenerationPath("availability"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        var availability = (await Read(response))["automaticSources"]!;
+        Assert.True(availability["supported"]!.GetValue<bool>());
+        Assert.Contains(availability["supportedTitles"]!.AsArray(),
+            title => title!.GetValue<string>() == "Harry Potter e a Ordem da Fênix");
+        Assert.Equal(0, fixture.Sources.IndexCalls);
+        Assert.Equal(0, fixture.Sources.ChapterCalls);
+        Assert.Equal(0, fixture.Generation.Calls);
+        await fixture.AssertNoEditorialContentAsync();
+    }
+
+    [Fact]
+    public async Task Unsupported_work_is_identified_before_collection_and_never_reaches_a_provider()
+    {
+        using var fixture = await Fixture.CreateAsync();
+        await fixture.WithDb(async db =>
+        {
+            var book = await db.Books.SingleAsync(book => book.Id == fixture.BookId);
+            book.Title = "O mapa fictício de Mira";
+            book.Author = "Uma autora de teste";
+            await db.SaveChangesAsync();
+        });
+
+        var response = await fixture.Admin.GetAsync(fixture.GenerationPath("availability"));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        var availability = (await Read(response))["automaticSources"]!;
+        Assert.False(availability["supported"]!.GetValue<bool>());
+        Assert.False(string.IsNullOrWhiteSpace(availability["reason"]!.GetValue<string>()));
+        Assert.NotEmpty(availability["supportedTitles"]!.AsArray());
+        Assert.Equal(HttpStatusCode.UnprocessableEntity,
+            (await Write(fixture.Admin, fixture.Path())).StatusCode);
+        Assert.Equal(0, fixture.Sources.IndexCalls);
+        Assert.Equal(0, fixture.Sources.ChapterCalls);
+        Assert.Equal(0, fixture.Generation.Calls);
+        await fixture.AssertNoEditorialContentAsync();
+    }
+
     [Fact]
     public async Task Authentication_admin_and_csrf_apply_before_any_source_request()
     {
@@ -568,9 +644,10 @@ public sealed class SourcePreparationEndpointTests
             cancellationToken.ThrowIfCancellationRequested();
             Interlocked.Increment(ref indexCalls);
             RequestedKeys.Add(bookKey);
-            Assert.Equal("hp1", bookKey);
+            Assert.Contains(bookKey, new[] { "hp1", "hp5" });
             return Task.FromResult(new NarrativeSourceIndex(
-                new(bookKey, "Harry Potter and the Philosopher's Stone", "Test", "en", "CC BY-SA 4.0"),
+                new(bookKey, bookKey == "hp5" ? "Harry Potter and the Order of the Phoenix"
+                    : "Harry Potter and the Philosopher's Stone", "Test", "en", "CC BY-SA 4.0"),
                 [new(1, "Arrival", "Test/Chapter 1"), new(2, "The map", "Test/Chapter 2")],
                 "index-revision", "https://en.wikibooks.org/wiki/Test", []));
         }

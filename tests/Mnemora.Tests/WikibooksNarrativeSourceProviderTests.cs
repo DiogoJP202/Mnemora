@@ -13,13 +13,14 @@ public sealed class WikibooksNarrativeSourceProviderTests
     [InlineData("hp1", 17)]
     [InlineData("hp2", 18)]
     [InlineData("hp3", 22)]
+    [InlineData("hp5", 38)]
     public async Task Index_uses_only_allowlisted_section_orders_and_exact_linked_chapter_paths(string key, int count)
     {
         using var fixture = new Fixture(key);
         var index = await fixture.Provider.GetIndexAsync(key, default);
         Assert.Equal(count, index.Chapters.Count);
         Assert.Equal(Enumerable.Range(1, count), index.Chapters.Select(chapter => chapter.Order));
-        Assert.Equal("pt", index.Book.Language);
+        Assert.Equal(key == "hp5" ? "en" : "pt", index.Book.Language);
         Assert.Equal("1000", index.RevisionId);
         Assert.Contains("oldid=1000", index.SourceUrl);
         Assert.Equal("Unidade fictícia 1", index.Chapters[0].Title);
@@ -28,6 +29,31 @@ public sealed class WikibooksNarrativeSourceProviderTests
         Assert.Contains("prop=tocdata", fixture.Calls[0].Query);
         Assert.Contains("oldid=1000", fixture.Calls[1].Query);
         Assert.Contains("section=1", fixture.Calls[1].Query);
+    }
+
+    [Fact]
+    public async Task Fifth_book_follows_the_english_index_and_only_its_synopsis_without_guessing_portuguese_pages()
+    {
+        using var fixture = new Fixture("hp5");
+        var index = await fixture.Provider.GetIndexAsync("hp5", default);
+        var result = await fixture.Provider.GetChapterAsync(index, index.Chapters[0], default);
+        Assert.NotNull(result);
+        Assert.Equal("en", result.Provenance.Language);
+        Assert.Contains("Order%20of%20the%20Phoenix", result.Provenance.Url);
+        Assert.Equal("Ari sees a lantern.", result.Text);
+        Assert.All(fixture.Calls, uri => Assert.Equal("en.wikibooks.org", uri.Host));
+        Assert.Equal(4, fixture.Calls.Count);
+    }
+
+    [Theory]
+    [InlineData("missing-index-chapter")]
+    [InlineData("external-index-chapter")]
+    [InlineData("duplicate-index-chapter")]
+    public async Task Fifth_book_keeps_the_same_complete_index_and_origin_validation(string mode)
+    {
+        using var fixture = new Fixture("hp5") { Mode = mode };
+        await Assert.ThrowsAsync<GenerationException>(() => fixture.Provider.GetIndexAsync("hp5", default));
+        Assert.All(fixture.Calls, uri => Assert.Equal("en.wikibooks.org", uri.Host));
     }
 
     [Fact]
@@ -187,6 +213,7 @@ public sealed class WikibooksNarrativeSourceProviderTests
             {
                 "hp2" => ("Guia dos Trouxas para Harry Potter/Livros/A Câmara Secreta", 18),
                 "hp3" => ("Guia dos Trouxas para Harry Potter/Livros/O Prisioneiro de Azkaban", 22),
+                "hp5" => ("Muggles' Guide to Harry Potter/Books/Order of the Phoenix", 38),
                 _ => ("Guia dos Trouxas para Harry Potter/Livros/A Pedra Filosofal", 17)
             };
             handler = new Handler(this);
@@ -208,17 +235,18 @@ public sealed class WikibooksNarrativeSourceProviderTests
 
         private string IndexHtml()
         {
-            var html = new StringBuilder("<div><h2>Capítulos</h2>");
+            var chapterLabel = key == "hp5" ? "Chapter" : "Capítulo";
+            var html = new StringBuilder($"<div><h2>{(key == "hp5" ? "Chapters" : "Capítulos")}</h2>");
             for (var order = 1; order <= count; order++)
             {
                 if (Mode == "missing-index-chapter" && order == count) continue;
-                var chapterPage = $"{page}/Capítulo{(key == "hp3" && order == 11 ? "" : " ")}{order}";
+                var chapterPage = $"{page}/{chapterLabel}{(key == "hp3" && order == 11 ? "" : " ")}{order}";
                 var href = order == 2 ? $"/w/index.php?title={Uri.EscapeDataString(chapterPage)}&amp;action=edit&amp;redlink=1"
                     : "/wiki/" + Uri.EscapeDataString(chapterPage.Replace(' ', '_'));
                 if (Mode == "external-index-chapter" && order == 1) href = "https://localhost/wiki/" + Uri.EscapeDataString(chapterPage);
-                html.Append($"<a href=\"{href}\">Capítulo {order}: Unidade fictícia {order}</a>");
+                html.Append($"<a href=\"{href}\">{chapterLabel} {order}: Unidade fictícia {order}</a>");
                 if (Mode == "duplicate-index-chapter" && order == 1)
-                    html.Append($"<a href=\"{href}\">Capítulo 1: Outra unidade</a>");
+                    html.Append($"<a href=\"{href}\">{chapterLabel} 1: Outra unidade</a>");
             }
             return html.Append("</div>").ToString();
         }
@@ -234,7 +262,7 @@ public sealed class WikibooksNarrativeSourceProviderTests
                 var english = uri.Host.StartsWith("en.");
                 if (query.TryGetValue("page", out var requested) && requested == fixture.page)
                     return fixture.Parse(fixture.Mode == "wrong-index-title" ? "Outra obra" : fixture.page,
-                        1000, 100, fixture.Toc("Capítulos", fixture.page, "1"));
+                        1000, 100, fixture.Toc(fixture.key == "hp5" ? "Chapters" : "Capítulos", fixture.page, "1"));
                 if (query.GetValueOrDefault("oldid") == "1000")
                     return fixture.Parse(fixture.page, fixture.Mode == "changed-index-revision" ? 1001 : 1000,
                         100, text: fixture.IndexHtml());
@@ -259,7 +287,8 @@ public sealed class WikibooksNarrativeSourceProviderTests
                 }
                 if (fixture.Mode == "both-missing" || !english && fixture.Mode == "pt-missing")
                     return fixture.Json(new { error = new { code = "missingtitle" } });
-                var chapterPage = english ? "Muggles' Guide to Harry Potter/Books/Philosopher's Stone/Chapter 1" : fixture.page + "/Capítulo 1";
+                var chapterPage = english ? fixture.key == "hp5" ? fixture.page + "/Chapter 1"
+                    : "Muggles' Guide to Harry Potter/Books/Philosopher's Stone/Chapter 1" : fixture.page + "/Capítulo 1";
                 if (query.ContainsKey("page"))
                 {
                     var toc = fixture.Toc(english ? "Synopsis" : fixture.Mode == "pt-no-synopsis" ? "Analysis" : "Sinopse",

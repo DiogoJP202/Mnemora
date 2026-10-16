@@ -293,7 +293,7 @@ Depois da importação, os controles existentes permitem consultar sumário, pre
 
 No detalhe administrativo, use **Encontrar referências públicas → Descobrir fontes públicas**. O servidor confere a edição exata na Open Library, procura até três candidatos no Wikidata, descarta tipos não literários e apresenta links da Wikipedia em português e inglês quando disponíveis. O painel distingue ISBN, vínculo da obra e correspondência não confirmada; mostra sumário candidato, lacunas e procedência e permite baixar o levantamento. Não exige chave adicional nem chama IA.
 
-Referências e sinopses gerais podem conter spoilers; essa descoberta bibliográfica não as envia ao gerador nem as transforma em lore. A API é `POST /api/admin/books/{id}/source-discovery`, protegida por Admin/CSRF, rate limit, HTTP limitado e respostas sem cache privado. A fase 25 acrescenta um caminho separado de [coleta de sinopses por capítulo](docs/automatic-sources.md), inicialmente para os três primeiros Harry Potter no Wikibooks.
+Referências e sinopses gerais podem conter spoilers; essa descoberta bibliográfica não as envia ao gerador nem as transforma em lore. A API é `POST /api/admin/books/{id}/source-discovery`, protegida por Admin/CSRF, rate limit, HTTP limitado e respostas sem cache privado. A fase 25 acrescenta um caminho separado de [coleta de sinopses por capítulo](docs/automatic-sources.md) para os três primeiros Harry Potter e Ordem da Fênix no Wikibooks.
 
 ### Importar um pacote editorial completo
 
@@ -303,7 +303,7 @@ Confira o [formato v1 e seu fluxo](docs/memory-pack-format.md), os limites e o [
 
 ### Gerar um pacote com IA
 
-No detalhe administrativo de um **livro compartilhado sem conteúdo editorial e sem publicação**, use **Gerar pacote com IA → Buscar e preparar fontes**. Para Pedra Filosofal, Câmara Secreta e Prisioneiro de Azkaban, o backend obtém o índice e as seções de sinopse do guia comunitário Wikibooks, em português com alternativa inglesa por capítulo quando necessária. Confira a correspondência com a edição e então use **Gerar pacote com as fontes coletadas**. Você não precisa escrever resumos ou preparar um JSON para esse caminho. A entrada manual permanece em **Alternativa: fornecer resumos por capítulo manualmente**, para outras obras e exceções.
+No detalhe administrativo de um **livro compartilhado sem conteúdo editorial e sem publicação**, use **Gerar pacote com IA → Buscar e preparar fontes**. O painel mostra a cobertura reconhecida antes de iniciar. Para Pedra Filosofal, Câmara Secreta e Prisioneiro de Azkaban, o backend obtém o índice e as seções de sinopse do guia comunitário Wikibooks, em português com alternativa inglesa por capítulo quando necessária. Para **Ordem da Fênix**, usa o índice verificado e as sinopses em inglês dos 38 capítulos; o índice equivalente em português não está disponível. Confira a correspondência com a edição e então use **Gerar pacote com as fontes coletadas**. Você não precisa escrever resumos ou preparar um JSON para esse caminho. A entrada manual permanece em **Alternativa: fornecer resumos por capítulo manualmente**, para outras obras e exceções.
 
 A geração processa cada capítulo em ordem e entrega o JSON v1 com um relatório separado de evidências e fontes/revisões. Revise candidatos, citações e revelações antes de enviar à validação e importação atuais; o pacote sempre entra em rascunho. Capítulos sem sinopse e índice não confirmado tornam o resultado parcial e exigem reconhecimento explícito. Análises, páginas de personagens e conhecimento próprio do modelo não são usados para preencher lacunas.
 
@@ -322,7 +322,7 @@ As fontes são enviadas ao Groq. Sessões ficam somente na memória do backend e
 - o modo offline cobre somente o shell público e assets estáticos, não biblioteca, notas, Admin ou outras respostas privadas;
 - cada usuário pode manter até 200 notas por livro, e o histórico de revisão conserva as 500 atividades mais recentes por usuário e livro;
 - o conteúdo de lore e seus pontos de revelação são curados pelo Admin, com autoria manual, geração sobre sinopses coletadas ou fornecidas e importação de um pacote revisado; o formato v1 não substitui nem mescla conteúdo existente diferente;
-- a coleta pública inicial é restrita aos três primeiros Harry Potter e às seções narrativas permitidas do Wikibooks. Não há pesquisa web genérica, leitura de PDF/EPUB ou garantia semântica de veracidade/ausência de spoilers; sessões temporárias e quotas podem interromper livros longos.
+- a coleta pública é restrita aos três primeiros Harry Potter e Ordem da Fênix, usando as seções narrativas permitidas do Wikibooks. Não há pesquisa web genérica, leitura de PDF/EPUB ou garantia semântica de veracidade/ausência de spoilers; sessões temporárias e quotas podem interromper livros longos.
 
 As evoluções candidatas estão registradas em [future.md](future.md).
 

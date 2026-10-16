@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +13,8 @@ public sealed class SourcePreparationService(SourcePreparationStore store, IBook
     {
         var book = await target.ReadAsync(bookId, cancellationToken: token);
         var identity = await IdentityAsync(bookId, token);
-        var key = Resolve(book);
+        var key = NarrativeSourceCatalog.Resolve(book) ?? throw new GenerationException("source_not_supported",
+            NarrativeSourceCatalog.UnsupportedReason, 422);
         var step = store.Create(owner, bookId, book, key, BookSourceDiscovery.Fingerprint(identity));
         if (step.Lease is null) return step.Status;
         var lease = step.Lease;
@@ -115,23 +115,6 @@ public sealed class SourcePreparationService(SourcePreparationStore store, IBook
             .Select(book => new SourceBookIdentity(book.Id, book.Title, book.Author, book.Isbn10, book.Isbn13,
                 book.Language, book.Publisher, book.PublishedDate, book.ExternalProvider, book.ExternalId)).SingleOrDefaultAsync(token)
         ?? throw new GenerationException("book_not_found", "Livro não encontrado.", 404);
-    private static string Resolve(MemoryPackBook book)
-    {
-        var author = Fold(book.Author);
-        if (author is not ("jkrowling" or "joannerowling" or "joannekathleenrowling")) throw Unsupported();
-        return Fold(book.Title) switch
-        {
-            "harrypottereapedrafilosofal" or "harrypotterandthephilosophersstone" or "harrypotterandthesorcerersstone" => "hp1",
-            "harrypottereacamarasecreta" or "harrypotterandthechamberofsecrets" => "hp2",
-            "harrypottereoprisioneirodeazkaban" or "harrypotterandtheprisonerofazkaban" => "hp3",
-            _ => throw Unsupported()
-        };
-    }
-    private static string Fold(string text) => string.Concat(text.Normalize(NormalizationForm.FormD)
-        .Where(character => CharUnicodeInfo.GetUnicodeCategory(character) != UnicodeCategory.NonSpacingMark && char.IsLetterOrDigit(character)))
-        .ToLowerInvariant();
-    private static GenerationException Unsupported() => new("source_not_supported",
-        "Ainda não há coleta automática por capítulo para esta obra. O primeiro catálogo cobre os três primeiros Harry Potter, de J. K. Rowling. A entrada manual continua disponível.", 422);
     private static GenerationException Translate(Exception error) => error switch
     {
         GenerationException known => known,

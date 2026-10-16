@@ -25,6 +25,7 @@ public sealed class MemoryPackCreditsPolicyTests
     [InlineData("https://evil.example/w/index.php?title=anything&oldid=1")]
     [InlineData("https://pt.wikibooks.org/w/index.php?title=Personagem_futura&oldid=1")]
     [InlineData("https://pt.wikibooks.org/w/index.php?title=anything&oldid=1&secret=spoiler")]
+    [InlineData("https://en.wikibooks.org/w/index.php?title=Guia%20dos%20Trouxas%20para%20Harry%20Potter%2FLivros%2FA%20Pedra%20Filosofal&oldid=1")]
     public void Untrusted_or_future_bearing_urls_are_not_reader_metadata(string url) =>
         Assert.Null(MemoryPackCreditsPolicy.Read(Book(url), true));
     [Fact]
@@ -35,5 +36,17 @@ public sealed class MemoryPackCreditsPolicyTests
         Assert.NotNull(credits);
         Assert.DoesNotContain("Identidade", credits.Url);
         Assert.DoesNotContain("#", credits.Url);
+    }
+
+    [Fact]
+    public void Fifth_book_can_credit_its_allowlisted_english_index_without_exposing_the_fragment()
+    {
+        var page = "Muggles' Guide to Harry Potter/Books/Order of the Phoenix";
+        var book = Book($"https://en.wikibooks.org/w/index.php?title={Uri.EscapeDataString(page)}&oldid=4409182#Future_identity");
+        var credits = MemoryPackCreditsPolicy.Read(book, true);
+        Assert.NotNull(credits);
+        Assert.StartsWith("https://en.wikibooks.org/", credits.Url);
+        Assert.DoesNotContain("Future", credits.Url);
+        Assert.Null(MemoryPackCreditsPolicy.Read(book, false));
     }
 }

@@ -1,6 +1,6 @@
 # Automação da adição de livros e preparação editorial
 
-Evolução após as fases 18–22 e o primeiro teste real com Groq. **Fases 23–25 implementadas:** importação de edições no Admin, descoberta bibliográfica e coleta narrativa por capítulo do Wikibooks para os três primeiros Harry Potter, entregue diretamente à geração atual. A coleta é temporária, exige correspondência da edição e preserva lacunas; não há pesquisa web genérica. As fases 26–28 continuam propostas. A prioridade é reduzir o cadastro manual e a coleta de fontes pelo Admin. O orçamento anterior de API zero continua valendo; não habilitar fornecedores ou fallbacks pagos.
+Evolução após as fases 18–22 e o primeiro teste real com Groq. **Fases 23–25 implementadas:** importação de edições no Admin, descoberta bibliográfica e coleta narrativa por capítulo do Wikibooks para os três primeiros Harry Potter e Ordem da Fênix, entregue diretamente à geração atual. A coleta é temporária, exige correspondência da edição e preserva lacunas; não há pesquisa web genérica. As fases 26–28 continuam propostas. A prioridade é reduzir o cadastro manual e a coleta de fontes pelo Admin. O orçamento anterior de API zero continua valendo; não habilitar fornecedores ou fallbacks pagos.
 
 ## Experiência pretendida
 

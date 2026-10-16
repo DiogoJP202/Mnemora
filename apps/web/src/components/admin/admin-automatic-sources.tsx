@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { apiGet, apiWrite, ApiResponseError, downloadJson } from "@/lib/api";
-import type { AdminBook, GenerationSession, SourcePreparationStatus } from "@/lib/admin-types";
+import type { AdminBook, GenerationSession, SourcePreparationAvailability, SourcePreparationStatus } from "@/lib/admin-types";
 
 type Props = {
   book: AdminBook; disabled: boolean;
+  availability: SourcePreparationAvailability | null;
   onWorkingChange: (working: boolean) => void;
   onStarted: (session: GenerationSession) => void | Promise<void>;
 };
@@ -15,9 +16,27 @@ const button = "min-h-11 rounded-lg border border-[var(--line)] px-4 py-2 text-s
 const primary = `${button} bg-[var(--action-surface)] text-[var(--action-text)]`;
 const stateLabels = { Collecting: "Coletando fontes", Ready: "Fontes prontas para conferência", Partial: "Coleta parcial", Cancelled: "Coleta cancelada" };
 const unitLabels = { Pending: "Aguardando coleta", Collected: "Resumo coletado", MissingSource: "Sem resumo disponível", Failed: "Falha na coleta" };
-const message = (cause: unknown) => cause instanceof Error ? cause.message : "Não foi possível preparar as fontes.";
+function message(cause: unknown) {
+  if (cause instanceof ApiResponseError && cause.status === 429) {
+    const sourceMessage = cause.code ? `${cause.message} ` : "";
+    const wait = cause.retryAfterSeconds && cause.retryAfterSeconds > 0 ? `${cause.retryAfterSeconds}s` : "cerca de um minuto";
+    return `${sourceMessage}O limite de requisições foi atingido e a operação foi pausada. Aguarde ${wait} antes de continuar.`;
+  }
+  return cause instanceof Error ? cause.message : "Não foi possível preparar as fontes.";
+}
+const minimumStepIntervalMs = 2100;
 
-export function AdminAutomaticSources({ book, disabled, onWorkingChange, onStarted }: Props) {
+function waitBeforeNextStep(milliseconds: number, signal: AbortSignal) {
+  signal.throwIfAborted();
+  if (milliseconds <= 0) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const onAbort = () => { clearTimeout(timer); reject(signal.reason); };
+    const timer = setTimeout(() => { signal.removeEventListener("abort", onAbort); resolve(); }, milliseconds);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
+}
+
+export function AdminAutomaticSources({ book, disabled, availability, onWorkingChange, onStarted }: Props) {
   const base = `/api/admin/books/${book.id}/source-preparations`;
   const [preparation, setPreparation] = useState<SourcePreparationStatus | null>(null);
   const [loading, setLoading] = useState(true);
@@ -31,8 +50,10 @@ export function AdminAutomaticSources({ book, disabled, onWorkingChange, onStart
   const controller = useRef<AbortController | null>(null);
   const preparationRef = useRef<SourcePreparationStatus | null>(null);
   const pending = useRef<{ kind: "next" | "generate"; operation: Operation } | null>(null);
+  const lastStepStarted = useRef<number | null>(null);
   const mounted = useRef(true);
   const formDisabled = disabled || loading || working !== null;
+  const canStartCollection = availability?.supported === true;
   const missing = preparation?.units.some((unit) => unit.status !== "Collected") ?? false;
   const hasSummary = preparation?.units.some((unit) => unit.summaryBytes > 0) ?? false;
   const partial = missing || !indexComplete || preparation?.state === "Partial" || preparation?.state === "Cancelled";
@@ -101,6 +122,7 @@ export function AdminAutomaticSources({ book, disabled, onWorkingChange, onStart
 
   async function collect(startNew = false) {
     if (formDisabled || expired && !startNew) return;
+    if ((startNew || !preparationRef.current) && !canStartCollection) return;
     const current = begin("collect");
     if (!current) return;
     try {
@@ -113,6 +135,9 @@ export function AdminAutomaticSources({ book, disabled, onWorkingChange, onStart
         current.signal.throwIfAborted();
         const operation = pending.current?.kind === "next" ? pending.current.operation : { operationId: crypto.randomUUID(), expectedRevision: progress.revision };
         pending.current = { kind: "next", operation };
+        if (lastStepStarted.current !== null) await waitBeforeNextStep(minimumStepIntervalMs - (performance.now() - lastStepStarted.current), current.signal);
+        current.signal.throwIfAborted();
+        lastStepStarted.current = performance.now();
         progress = await apiWrite<SourcePreparationStatus>(`${base}/${progress.preparationId}/next`, "POST", operation, { signal: current.signal });
         pending.current = null;
         update(progress);
@@ -120,8 +145,8 @@ export function AdminAutomaticSources({ book, disabled, onWorkingChange, onStart
       setNotice("Coleta encerrada. Confira a obra, a sequência dos capítulos, as lacunas e a origem dos resumos antes de gerar.");
     } catch (cause) {
       if (!current.signal.aborted) {
-        const retry = cause instanceof ApiResponseError && cause.retryAfterSeconds ? ` Aguarde ${cause.retryAfterSeconds}s antes de continuar.` : "";
-        setError(`${message(cause)}${retry} Não haverá nova tentativa automática.`);
+        const resume = cause instanceof ApiResponseError && cause.status === 429 && preparationRef.current?.state === "Collecting" ? " Use “Continuar coleta” para retomar os capítulos pendentes." : "";
+        setError(`${message(cause)}${resume} Não haverá nova tentativa automática.`);
         try { await refreshStatus(current.signal); }
         catch { setNotice("Consulte o progresso para recuperar o último estado disponível. Fontes já coletadas permanecem na sessão temporária."); }
       }
@@ -176,11 +201,18 @@ export function AdminAutomaticSources({ book, disabled, onWorkingChange, onStart
       <h3 id="automatic-sources-title" className="text-xl font-semibold">Buscar capítulos e resumos automaticamente</h3>
       <p className="mt-2 text-sm text-[var(--ink-soft)]">O serviço procura uma fonte pública compatível, coleta os resumos em ordem e os entrega à IA para organizar o pacote. Você acompanha a cobertura e revisa o rascunho antes da importação.</p>
       <p className="mt-2 text-sm text-[var(--ink-soft)]">A cobertura depende da obra e da fonte disponível. Nesta etapa, os resumos podem estar em inglês; confira a tradução dos nomes e a correspondência com sua edição. As telas de revisão podem conter spoilers do livro inteiro.</p>
+      <div className="mt-3 rounded-lg border border-[var(--line)] p-3 text-sm">
+        {availability ? <>
+          <p className="font-semibold">Obras com coleta automática disponível</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">{availability.supportedTitles.map((title) => <li key={title}>{title}</li>)}</ul>
+          <p role="status" className="mt-3">{availability.supported ? "Este livro está coberto pela coleta automática. Confira a correspondência com sua edição antes de gerar." : availability.reason ?? "Este livro ainda não possui coleta automática. Use a entrada manual abaixo."}</p>
+        </> : <p role="status">Verificando se este livro tem coleta automática disponível…</p>}
+      </div>
       {loading && <p role="status" className="mt-3 text-sm">Verificando preparação anterior…</p>}
       {error && <p role="alert" className="form-alert mt-3 rounded-lg border p-3 text-sm">{error}</p>}
       {notice && <p role="status" className="mt-3 text-sm">{notice}</p>}
-      {expired && <p role="status" className="mt-3 rounded-lg border border-[var(--line)] p-3 text-sm">A sessão não está mais disponível no servidor. Você ainda pode baixar o relatório visível com prévias e referências, ou iniciar uma nova coleta.</p>}
-      {!preparation && <button type="button" disabled={formDisabled} className={`${primary} mt-4`} onClick={() => void collect()}>{working === "collect" ? "Buscando fontes…" : "Buscar e preparar fontes"}</button>}
+      {expired && <p role="status" className="mt-3 rounded-lg border border-[var(--line)] p-3 text-sm">A sessão não está mais disponível no servidor. Você ainda pode baixar o relatório visível com prévias e referências.{canStartCollection ? " Também é possível iniciar uma nova coleta." : ""}</p>}
+      {!preparation && <button type="button" disabled={formDisabled || !canStartCollection} className={`${primary} mt-4`} onClick={() => void collect()}>{working === "collect" ? "Buscando fontes…" : "Buscar e preparar fontes"}</button>}
       {preparation && <div className="mt-4 min-w-0">
         <p role="status" className="font-semibold">{stateLabels[preparation.state]}</p>
         <p className="mt-2 break-words text-sm">Obra da fonte: <strong>{preparation.sourceBookTitle}</strong> · idioma {preparation.language}</p>
@@ -200,7 +232,7 @@ export function AdminAutomaticSources({ book, disabled, onWorkingChange, onStart
         {preparation.diagnostics.length > 0 && <details className="mt-3"><summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">Alertas das fontes ({preparation.diagnostics.length})</summary><ul className="list-disc space-y-2 pl-5 text-sm">{preparation.diagnostics.map((diagnostic, index) => <li key={index} className="break-words">{diagnostic}</li>)}</ul></details>}
         <div className="mt-4 flex flex-wrap gap-2">
           {preparation.state === "Collecting" && !expired && <button type="button" disabled={formDisabled} className={primary} onClick={() => void collect()}>Continuar coleta</button>}
-          {(preparation.state === "Cancelled" || expired) && <button type="button" disabled={formDisabled} className={primary} onClick={() => void collect(true)}>Iniciar nova coleta</button>}
+          {(preparation.state === "Cancelled" || expired) && <button type="button" disabled={formDisabled || !canStartCollection} className={primary} onClick={() => void collect(true)}>Iniciar nova coleta</button>}
           <button type="button" disabled={formDisabled || expired} className={button} onClick={() => void refresh()}>Consultar coleta</button>
           <button type="button" disabled={working !== null} className={button} onClick={() => downloadJson(`mnemora-${book.id}-fontes-coletadas.json`, JSON.stringify(preparation, null, 2))}>Baixar relatório da coleta</button>
           {preparation.state !== "Cancelled" && !expired && <button type="button" disabled={working === "cancel" || disabled} className={button} onClick={() => void cancel()}>{working === "cancel" ? "Cancelando…" : preparation.state === "Collecting" ? "Cancelar coleta" : "Descartar preparação"}</button>}

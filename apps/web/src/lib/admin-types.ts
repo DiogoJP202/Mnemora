@@ -60,9 +60,13 @@ export type GenerationSession = {
   completedUnits: number; totalUnits: number; calls: number; tokens: number; estimatedTokens: number;
   nextAllowedAt: string | null; coverage: GenerationCoverage[]; diagnostics: string[]; hasImportableResult: boolean;
 };
+export type SourcePreparationAvailability = {
+  supported: boolean; reason: string | null; supportedTitles: string[];
+};
 export type GenerationAvailability = {
   enabled: boolean; reason: string | null; model: string; maxUnits: number; maxSourceBytes: number;
   minCallIntervalSeconds: number; existingSession: GenerationSession | null;
+  automaticSources: SourcePreparationAvailability;
   configuration?: { ready: boolean; localSetup: boolean; issues: { code: string; setting: string; message: string }[] };
 };
 export type GenerationEvidence = {

@@ -341,7 +341,7 @@ export function AdminMemoryPackGeneration({ book, disabled, disabledReason, onWo
       {notice && <p role="status" className="mt-4 text-sm">{notice}</p>}
 
       {!session && (<>
-        <AdminAutomaticSources book={book} disabled={disabled || working !== null || !availability?.enabled || hasContent || otherActive}
+        <AdminAutomaticSources book={book} availability={availability?.automaticSources ?? null} disabled={disabled || working !== null || !availability?.enabled || hasContent || otherActive}
           onWorkingChange={handleAutomaticWorking} onStarted={startAutomaticGeneration} />
         <details className="mt-5 min-w-0 rounded-xl border border-[var(--line)] p-4">
           <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">Alternativa: fornecer resumos por capítulo manualmente</summary>

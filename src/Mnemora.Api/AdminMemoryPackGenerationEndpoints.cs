@@ -29,7 +29,8 @@ public static class AdminMemoryPackGenerationEndpoints
             await ExecuteAsync(context, async () =>
             {
                 string? reason = null;
-                try { await target.ReadAsync(bookId, cancellationToken: cancellationToken); }
+                MemoryPackBook? book = null;
+                try { book = await target.ReadAsync(bookId, cancellationToken: cancellationToken); }
                 catch (GenerationException exception) when (exception.StatusCode == 409) { reason = exception.Message; }
                 var options = configured.Value;
                 var issues = GenerationConfiguration.Inspect(options);
@@ -41,6 +42,7 @@ public static class AdminMemoryPackGenerationEndpoints
                     enabled = enabled && reason is null, reason, model = "openai/gpt-oss-120b", options.MaxUnits,
                     options.MaxSourceBytes, options.MinCallIntervalSeconds,
                     configuration = new { ready = enabled, issues, localSetup = environment.IsDevelopment() },
+                    automaticSources = NarrativeSourceCatalog.GetAvailability(book ?? new MemoryPackBook("", "")),
                     existingSession = store.FindExisting(CurrentUser.Id(context.User))
                 });
             }));
