@@ -1,6 +1,6 @@
 # Geração assistida de pacotes editoriais
 
-O recurso **Gerar pacote com IA**, no detalhe administrativo de um livro, transforma resumos fornecidos por capítulo em um [pacote JSON v1](memory-pack-format.md). O resultado tem evidências em um relatório separado e segue a validação/importação já existente, sempre em rascunho. A geração não publica conteúdo, não altera o contrato v1 e não cria migrations.
+O recurso **Gerar pacote com IA**, no detalhe administrativo de um livro, transforma sinopses coletadas ou resumos fornecidos por capítulo em um [pacote JSON v1](memory-pack-format.md). A fase 25 acrescenta **Buscar e preparar fontes** para os três primeiros Harry Potter; veja o [guia da coleta automática](automatic-sources.md). A entrada manual descrita abaixo permanece como alternativa. O resultado tem evidências e procedência em um relatório separado e segue a validação/importação existente, sempre em rascunho. A geração não publica conteúdo, não altera o contrato v1 e não cria migrations.
 
 ## Configuração
 

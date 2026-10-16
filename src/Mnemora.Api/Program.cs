@@ -31,6 +31,18 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<MemoryPackGenerationSessionStore>();
 builder.Services.AddScoped<MemoryPackGenerationTarget>();
 builder.Services.AddScoped<MemoryPackGenerationService>();
+builder.Services.AddSingleton<SourcePreparationStore>();
+builder.Services.AddScoped<SourcePreparationService>();
+builder.Services.AddSingleton<IBookNarrativeSourceProvider>(services => new WikibooksNarrativeSourceProvider(
+    services.GetRequiredService<IHttpClientFactory>().CreateClient, services.GetRequiredService<TimeProvider>()));
+foreach (var language in new[] { "pt", "en" })
+    builder.Services.AddHttpClient($"narrative-wikibooks-{language}", client =>
+    {
+        client.BaseAddress = new Uri($"https://{language}.wikibooks.org/");
+        client.Timeout = TimeSpan.FromSeconds(8);
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("Mnemora/1.0 (+https://github.com/DiogoJP202/Mnemora)");
+        client.DefaultRequestHeaders.Accept.ParseAdd("application/json");
+    }).ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler { AllowAutoRedirect = false });
 builder.Services.AddHttpClient<IMemoryPackGenerationProvider, GroqMemoryPackGenerationProvider>(client =>
     client.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddMemoryCache(options => options.SizeLimit = 1_000);
@@ -191,7 +203,10 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 app.Lifetime.ApplicationStopping.Register(() =>
-    app.Services.GetRequiredService<MemoryPackGenerationSessionStore>().Stop());
+{
+    app.Services.GetRequiredService<MemoryPackGenerationSessionStore>().Stop();
+    app.Services.GetRequiredService<SourcePreparationStore>().Stop();
+});
 
 app.UseForwardedHeaders();
 app.UseExceptionHandler();
@@ -271,6 +286,7 @@ app.MapAdminRelationEndpoints();
 app.MapAdminMemoryPackEndpoints();
 app.MapAdminMemoryPackGenerationEndpoints();
 app.MapAdminSourceDiscoveryEndpoints();
+app.MapAdminSourcePreparationEndpoints();
 app.Run();
 
 public partial class Program;

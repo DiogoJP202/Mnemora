@@ -24,9 +24,12 @@ A avaliação precisa incluir ataques com termos futuros, aliases ainda bloquead
 
 ## Assistência por IA
 
-O Admin já pode gerar um [pacote JSON v1 com evidências](docs/assisted-generation.md) a partir de resumos fornecidos por capítulo, usando Groq e revisão humana. O backend atribui os pontos de revelação e preserva as apresentações iniciais. A funcionalidade é opcional, desabilitada por padrão e restrita a livros compartilhados sem conteúdo editorial. A geração não publica nem responde ao leitor.
+O Admin já pode gerar um [pacote JSON v1 com evidências](docs/assisted-generation.md) a partir de resumos por capítulo, usando Groq e revisão humana. A [coleta automática inicial](docs/automatic-sources.md) obtém sinopses do Wikibooks para os três primeiros Harry Potter, com procedência e sem escrever resumos manualmente. O backend atribui os pontos de revelação e preserva as apresentações iniciais. A funcionalidade é opcional, desabilitada por padrão e restrita a livros compartilhados sem conteúdo editorial. A geração não publica nem responde ao leitor.
 
 Evoluções fora desse fluxo inicial:
+
+- acrescentar adaptadores para outras obras e fontes permitidas, com correspondência e cobertura verificadas;
+- dividir fontes longas dentro da unidade e ampliar a estratégia de registro conhecido sem truncamento silencioso;
 
 - persistir sessões e permitir retomada após reinício, com retenção e exclusão explícitas;
 - avaliar outro provedor ou um modelo local, sem fallback pago automático;

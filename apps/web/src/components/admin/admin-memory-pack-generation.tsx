@@ -1,11 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AdminAutomaticSources } from "@/components/admin/admin-automatic-sources";
 import { apiGet, apiWrite, ApiResponseError, downloadJson } from "@/lib/api";
 import type {
   AdminBook, GeneratedMemoryPackSelection, GenerationAvailability, GenerationEvidence,
-  GenerationResult, GenerationSession, GenerationSourceParseResult,
+  GenerationResult, GenerationSession, GenerationSourceParseResult, GenerationSourceProvenance,
 } from "@/lib/admin-types";
 
 type Props = {
@@ -66,6 +67,7 @@ export function AdminMemoryPackGeneration({ book, disabled, disabledReason, onWo
   const [reviewed, setReviewed] = useState(false);
   const [partialAcknowledged, setPartialAcknowledged] = useState(false);
   const [working, setWorking] = useState<Working>(null);
+  const [automaticWorking, setAutomaticWorking] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [clock, setClock] = useState(() => Date.now());
@@ -76,22 +78,41 @@ export function AdminMemoryPackGeneration({ book, disabled, disabledReason, onWo
   const reviewHeading = useRef<HTMLHeadingElement>(null);
   const sourceBytes = useMemo(() => new TextEncoder().encode(sourcesText).byteLength, [sourcesText]);
   const evidence = result?.report.evidence;
+  const sources = result?.report.sources;
   const evidenceByUnit = useMemo(() => {
     const grouped = new Map<string, GenerationEvidence[]>();
     for (const item of evidence ?? []) grouped.set(item.unitSlug, [...(grouped.get(item.unitSlug) ?? []), item]);
     return grouped;
   }, [evidence]);
+  const sourcesByUnit = useMemo(() => {
+    const grouped = new Map<string, GenerationSourceProvenance[]>();
+    for (const source of sources ?? []) grouped.set(source.unitSlug, [...(grouped.get(source.unitSlug) ?? []), source]);
+    return grouped;
+  }, [sources]);
   const hasContent = book.unitCount > 0 || book.entityCount > 0 || book.factCount > 0 || book.relationCount > 0 || book.eventCount > 0
     || book.readingOutlineStatus === "Published" || book.loreStatus === "Published";
   const otherSession = availability?.existingSession?.bookId !== book.id ? availability?.existingSession : null;
   const otherActive = Boolean(otherSession && !terminal(otherSession));
-  const formDisabled = disabled || working !== null || !availability?.enabled || hasContent || otherActive;
+  const formDisabled = disabled || working !== null || automaticWorking || !availability?.enabled || hasContent || otherActive;
   const waitingSeconds = session?.nextAllowedAt ? Math.max(0, Math.ceil((Date.parse(session.nextAllowedAt) - clock) / 1000)) : 0;
 
   function updateSession(updated: GenerationSession) {
     sessionRef.current = updated;
     setSession(updated);
     setClock(Date.now());
+  }
+
+  const handleAutomaticWorking = useCallback((active: boolean) => {
+    setAutomaticWorking(active);
+    onWorkingChange(active);
+  }, [onWorkingChange]);
+
+  async function startAutomaticGeneration(created: GenerationSession) {
+    updateSession(created);
+    setResult(null);
+    setReviewed(false);
+    setPartialAcknowledged(false);
+    await run(false);
   }
 
   useEffect(() => {
@@ -299,7 +320,7 @@ export function AdminMemoryPackGeneration({ book, disabled, disabledReason, onWo
     <section aria-labelledby="generation-title" className="mt-8 min-w-0 max-w-4xl rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5">
       <span className="section-index">GERAÇÃO ASSISTIDA</span>
       <h2 id="generation-title" className="mt-2 text-2xl font-semibold">Gerar pacote com IA</h2>
-      <p className="mt-2 text-sm text-[var(--ink-soft)]">O conteúdo é extraído em ordem, com evidências por capítulo. A revisão editorial e dos pontos de revelação continua sendo sua responsabilidade.</p>
+      <p className="mt-2 text-sm text-[var(--ink-soft)]">Busque os capítulos e resumos disponíveis e deixe a IA organizar o conhecimento em ordem, com evidências por capítulo. Confira a fonte e revise os pontos de revelação antes de importar.</p>
       <p className="mt-2 text-xs text-[var(--ink-soft)]">Sessão temporária: reinício ou expiração elimina os artefatos no servidor. Baixe o JSON e o relatório para conservá-los.</p>
       {!availability && !error && <p role="status" className="mt-4 text-sm">Verificando disponibilidade…</p>}
       {availability?.reason && <p role="status" className="mt-4 rounded-lg border border-[var(--line)] p-3 text-sm">{availability.reason}</p>}
@@ -319,8 +340,13 @@ export function AdminMemoryPackGeneration({ book, disabled, disabledReason, onWo
       {error && <p role="alert" className="form-alert mt-4 rounded-lg border p-3 text-sm">{error}</p>}
       {notice && <p role="status" className="mt-4 text-sm">{notice}</p>}
 
-      {!session && (
-        <div className="mt-5 grid min-w-0 gap-4">
+      {!session && (<>
+        <AdminAutomaticSources book={book} disabled={disabled || working !== null || !availability?.enabled || hasContent || otherActive}
+          onWorkingChange={handleAutomaticWorking} onStarted={startAutomaticGeneration} />
+        <details className="mt-5 min-w-0 rounded-xl border border-[var(--line)] p-4">
+          <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">Alternativa: fornecer resumos por capítulo manualmente</summary>
+          <p className="mt-2 text-sm text-[var(--ink-soft)]">Use este caminho quando não houver uma fonte automática compatível ou quando preferir preparar suas próprias fontes.</p>
+        <div className="mt-4 grid min-w-0 gap-4">
           {book.externalProvider === "OpenLibrary" && book.externalId?.toUpperCase().endsWith("M") && (
             <details className="rounded-xl border border-[var(--line)] p-3">
               <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">Consultar títulos na Open Library</summary>
@@ -363,7 +389,8 @@ export function AdminMemoryPackGeneration({ book, disabled, disabledReason, onWo
           <p className="text-sm text-[var(--ink-soft)]">Os resumos serão enviados ao Groq para extração. Confira o conteúdo das fontes antes de iniciar.</p>
           <button type="button" disabled={formDisabled || !parsed?.isValid || !editionConfirmed || !attribution.trim()} onClick={() => void run(true)} className={`${primary} justify-self-start`}>Gerar rascunho</button>
         </div>
-      )}
+        </details>
+      </>)}
 
       {(session || working === "run") && <div className="mt-5 rounded-xl border border-[var(--line)] bg-[var(--paper)] p-4">
         <h3 className="text-lg font-semibold" role="status">{session ? states[session.state] : "Iniciando sessão…"}</h3>
@@ -392,6 +419,13 @@ export function AdminMemoryPackGeneration({ book, disabled, disabledReason, onWo
         <div className="mt-4 grid gap-3">
           {result.report.units.map((unit, index) => <details key={unit.unitSlug} className="min-w-0 rounded-xl border border-[var(--line)] p-4">
             <summary className="min-h-11 cursor-pointer py-2 text-sm font-semibold">{index + 1}. {unit.title} · {coverageLabels[unit.status]} · {evidenceByUnit.get(unit.unitSlug)?.length ?? 0} evidências</summary>
+            {(sourcesByUnit.get(unit.unitSlug) ?? []).map((source) => <aside key={`${source.provider}-${source.pageId}-${source.revisionId}`} aria-label="Origem do capítulo" className="mt-3 min-w-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] p-3 text-xs text-[var(--ink-soft)]">
+              <p className="break-words"><strong>Fonte: {source.provider}</strong> · idioma {source.language} · {source.license}</p>
+              <p className="mt-2 break-words">{source.attribution}</p>
+              <a href={source.url} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex min-h-11 items-center break-all text-sm underline">Abrir fonte deste capítulo</a>
+              <p className="break-all">Revisão {source.revisionId} · página {source.pageId}</p>
+              <p className="mt-2 break-all">SHA-256 da fonte: {source.sourceHash}</p>
+            </aside>)}
             {(evidenceByUnit.get(unit.unitSlug) ?? []).map((item, itemIndex) => <article key={`${item.itemId}-${item.paragraphId}-${itemIndex}`} className="mt-3 min-w-0 rounded-lg border border-[var(--line)] bg-[var(--paper)] p-3">
               <p className="break-all text-xs text-[var(--ink-soft)]">{item.jsonPath} · parágrafo {item.paragraphId}</p>
               <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words text-xs">{candidateAt(result.document, item.jsonPath)}</pre>

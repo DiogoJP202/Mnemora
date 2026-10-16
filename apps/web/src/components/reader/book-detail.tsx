@@ -327,6 +327,36 @@ export function BookDetail({ bookId }: { bookId: string }) {
         />
       )}
 
+      {packAvailable && (book.memoryPackAttribution || book.memoryPackSourceUrl) && (
+        <section
+          aria-labelledby="memory-pack-credits-title"
+          className="my-6 min-w-0 rounded-2xl border border-[var(--line)] bg-[var(--surface)] p-5"
+        >
+          <span className="section-index">CRÉDITOS</span>
+          <h2 id="memory-pack-credits-title" className="mt-2 text-xl font-semibold">Fontes deste pacote</h2>
+          {book.memoryPackAttribution && (
+            <p className="mt-3 whitespace-pre-wrap break-words text-sm text-[var(--ink-soft)]">
+              {book.memoryPackAttribution}
+            </p>
+          )}
+          {book.memoryPackAttribution?.includes("CC BY-SA 4.0") && (
+            <a href="https://creativecommons.org/licenses/by-sa/4.0/" target="_blank" rel="noopener noreferrer" className="mt-2 inline-flex min-h-11 items-center text-sm underline">
+              Consultar licença CC BY-SA 4.0
+            </a>
+          )}
+          {book.memoryPackSourceUrl && (
+            <div className="mt-2">
+              <p id="memory-pack-source-warning" className="text-sm text-[var(--ink-soft)]">
+                A fonte externa pode contar a história inteira e conter spoilers além do seu ponto de leitura.
+              </p>
+              <a href={book.memoryPackSourceUrl} target="_blank" rel="noopener noreferrer" aria-describedby="memory-pack-source-warning" className="mt-2 inline-flex min-h-11 items-center text-sm underline">
+                Abrir fonte original em outra aba
+              </a>
+            </div>
+          )}
+        </section>
+      )}
+
       {libraryItem && (
         <>
           <div className="reading-layout">

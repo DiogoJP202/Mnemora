@@ -9,7 +9,8 @@ public sealed record BookDto(
     bool MemoryPackAvailable = false,
     bool ReadingOutlineAvailable = false,
     string MemoryPackStatus = "Unavailable",
-    bool CanRequestMemoryPack = false);
+    bool CanRequestMemoryPack = false,
+    string? MemoryPackSourceUrl = null, string? MemoryPackAttribution = null);
 public sealed record BookSearchDto(
     Guid? Id, string? ExternalProvider, string? ExternalId, string Source,
     string Title, string? Subtitle, string Author, string? CoverUrl,

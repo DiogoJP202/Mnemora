@@ -62,6 +62,7 @@ public sealed class MemoryPackGenerationSessionStore(IOptions<GenerationOptions>
         public required DateTimeOffset CreatedAt { get; init; }
         public required DateTimeOffset TouchedAt { get; set; }
         public required byte[] Sources { get; init; }
+        public required byte[] SourceProvenance { get; init; }
         public required byte[] Document { get; set; }
         public required byte[] Report { get; set; }
         public required GenerationUnitCoverage[] Coverage { get; set; }
@@ -84,7 +85,8 @@ public sealed class MemoryPackGenerationSessionStore(IOptions<GenerationOptions>
     }
 
     public GenerationSessionStatus Create(Guid owner, Guid bookId, GenerationStartRequest start,
-        MemoryPackDocument document, IReadOnlyList<string>? diagnostics = null) => Access(() =>
+        MemoryPackDocument document, IReadOnlyList<string>? diagnostics = null,
+        IReadOnlyList<GenerationSourceProvenance>? provenance = null) => Access(() =>
     {
         if (stopping) throw Error("generation_stopping", "O servidor está encerrando. Preserve o resultado parcial.", 503);
         var previous = sessions.Values.FirstOrDefault(session => session.Owner == owner);
@@ -109,7 +111,8 @@ public sealed class MemoryPackGenerationSessionStore(IOptions<GenerationOptions>
         var session = new Session
         {
             Id = Guid.NewGuid(), Owner = owner, BookId = bookId, CreatedAt = now, TouchedAt = now,
-            Sources = Serialize(start.Sources), Document = Serialize(document), Report = [],
+            Sources = Serialize(start.Sources), SourceProvenance = Serialize(provenance ?? []),
+            Document = Serialize(document), Report = [],
             Coverage = coverage, Attempts = new int[coverage.Length], IndexComplete = start.IndexComplete,
             Attribution = document.Source?.Attribution, SourceUrl = document.Source?.Url,
             Diagnostics = CleanDiagnostics(diagnostics ?? [])
@@ -419,7 +422,8 @@ public sealed class MemoryPackGenerationSessionStore(IOptions<GenerationOptions>
         limits.Provider, limits.Model, GenerationPrompt.Version, session.Attribution, session.SourceUrl,
         session.IndexComplete, !session.IndexComplete || session.Coverage.Any(unit => unit.Status != "Generated"),
         Hash(Serialize(document)), session.Calls, Counter(session.Tokens), Counter(session.EstimatedTokens),
-        [.. session.Coverage], evidence, [.. session.Diagnostics]));
+        [.. session.Coverage], evidence, [.. session.Diagnostics],
+        Deserialize<GenerationSourceProvenance[]>(session.SourceProvenance)));
 
     private GenerationReport CurrentReport(Session session)
     {
@@ -467,7 +471,7 @@ public sealed class MemoryPackGenerationSessionStore(IOptions<GenerationOptions>
             throw Error("document_too_large", "O pacote excede o limite do JSON v1.", 422);
         if (report.Length > limits.MaxReportBytes)
             throw Error("report_too_large", "O relatório excede o limite permitido.", 422);
-        long retained = session.Sources.Length + (long)document.Length + report.Length + 32 * 1024
+        long retained = session.Sources.Length + session.SourceProvenance.LongLength + document.Length + report.Length + 32 * 1024
             + Serialize(session.Coverage).LongLength * 2
             + session.Diagnostics.Sum(diagnostic => (long)Encoding.UTF8.GetByteCount(diagnostic) * 2 + 32)
             + session.Receipts.Values.Sum(ReceiptBytes)

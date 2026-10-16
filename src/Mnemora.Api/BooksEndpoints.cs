@@ -245,14 +245,17 @@ public static class BooksEndpoints
                 requested.Contains(book.Id)));
     }
 
-    private static BookDto ToBookDto(Book book, MemoryPackAvailability availability) =>
-        new(book.Id, book.Title, book.Subtitle, book.Author,
+    private static BookDto ToBookDto(Book book, MemoryPackAvailability availability)
+    {
+        var credits = MemoryPackCreditsPolicy.Read(book, availability.MemoryPackAvailable);
+        return new(book.Id, book.Title, book.Subtitle, book.Author,
             book.Description, book.CoverUrl, book.Isbn10, book.Isbn13,
             book.Publisher, book.PublishedDate, book.Language,
             availability.MemoryPackAvailable,
             availability.ReadingOutlineAvailable,
             availability.Status,
-            availability.CanRequest);
+            availability.CanRequest, credits?.Url, credits?.Attribution);
+    }
 
     private static BookSearchDto ToSearchDto(
         Book book, MemoryPackAvailability availability) =>

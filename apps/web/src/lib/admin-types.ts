@@ -68,14 +68,32 @@ export type GenerationAvailability = {
 export type GenerationEvidence = {
   unitSlug: string; sourceHash: string; paragraphId: string; quote: string; justification: string; itemId: string; jsonPath: string;
 };
+export type GenerationSourceProvenance = {
+  unitSlug: string; provider: string; url: string; revisionId: string; pageId: string;
+  language: string; license: string; attribution: string; retrievedAt: string;
+  responseHash: string; sourceHash: string;
+};
 export type GenerationReport = {
   provider: string; model: string; promptVersion: string; sourceAttribution: string | null; sourceUrl: string | null;
   indexComplete: boolean; partial: boolean; packHash: string; calls: number; tokens: number; estimatedTokens: number;
   units: GenerationCoverage[]; evidence: GenerationEvidence[]; diagnostics: string[];
+  sources?: GenerationSourceProvenance[] | null;
 };
 export type GenerationResult = {
   status: GenerationSession; document: Record<string, unknown>; documentJson: string;
   report: GenerationReport; validation: MemoryPackValidation;
+};
+export type SourcePreparationUnit = {
+  order: number; title: string; status: "Pending" | "Collected" | "MissingSource" | "Failed";
+  summaryBytes: number; sourceUrl: string | null; revisionId: string | null;
+  sourceHash: string | null; summaryPreview: string | null;
+};
+export type SourcePreparationStatus = {
+  preparationId: string; bookId: string; revision: number;
+  state: "Collecting" | "Ready" | "Partial" | "Cancelled";
+  sourceBookTitle: string; language: string; sourceUrl: string; attribution: string; license: string;
+  completedUnits: number; totalUnits: number; units: SourcePreparationUnit[];
+  diagnostics: string[]; expiresAt: string; generationRunId: string | null;
 };
 export type GeneratedMemoryPackSelection = {
   id: string; json: string; originalJson: string; isPartial: boolean; reportHash: string;

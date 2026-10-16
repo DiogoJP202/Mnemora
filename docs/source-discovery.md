@@ -36,4 +36,4 @@ Não existe migration nova, worker ou persistência de pesquisa nesta fase. Rein
 
 ## Próxima etapa
 
-A fase 25 tratará coleta permitida e delimitação de fontes narrativas por unidade. Links gerais desta fase não equivalem a fontes aprovadas: antes da extração, será necessário conferir acesso, condições de uso, edição, tradução, contexto e capítulo. Até lá, a geração assistida continua usando resumos fornecidos pelo Admin.
+A fase 25 acrescentou [coleta permitida e delimitação por capítulo](automatic-sources.md), inicialmente com o guia Wikibooks dos três primeiros Harry Potter. Links gerais da descoberta bibliográfica continuam sem equivaler a fontes aprovadas: o novo coletor usa destinos e seções específicos, com revisões e procedência. A entrada manual permanece para outras obras e exceções.

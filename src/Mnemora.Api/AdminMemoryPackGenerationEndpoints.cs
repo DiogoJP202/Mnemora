@@ -91,7 +91,7 @@ public static class AdminMemoryPackGenerationEndpoints
         return app;
     }
 
-    private static async Task<IResult> ExecuteAsync(HttpContext context, Func<Task<IResult>> operation)
+    internal static async Task<IResult> ExecuteAsync(HttpContext context, Func<Task<IResult>> operation)
     {
         try { return await operation(); }
         catch (GenerationException exception)
@@ -107,7 +107,7 @@ public static class AdminMemoryPackGenerationEndpoints
         }
     }
 
-    private static async Task<T> ReadAsync<T>(HttpRequest request, CancellationToken cancellationToken)
+    internal static async Task<T> ReadAsync<T>(HttpRequest request, CancellationToken cancellationToken)
     {
         if (!request.HasJsonContentType())
             throw new GenerationException("invalid_content_type", "Envie os dados como application/json.", 415);

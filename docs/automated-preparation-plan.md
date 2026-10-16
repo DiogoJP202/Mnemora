@@ -1,6 +1,6 @@
 # Automação da adição de livros e preparação editorial
 
-Evolução após as fases 18–22 e o primeiro teste real com Groq. **Fases 23 e 24 implementadas:** busca/importação de edições no Admin e descoberta limitada de sumário e referências públicas na Open Library e no Wikidata, com links da Wikipedia. As fases 25–28 abaixo continuam propostas; coleta narrativa e preparação automática ainda não estão implementadas. A prioridade solicitada é reduzir o cadastro manual e a coleta de fontes pelo Admin, aproveitando APIs públicas e pesquisa de fontes antes da organização por IA. O orçamento anterior de API zero continua valendo; não habilitar fornecedores ou fallbacks pagos.
+Evolução após as fases 18–22 e o primeiro teste real com Groq. **Fases 23–25 implementadas:** importação de edições no Admin, descoberta bibliográfica e coleta narrativa por capítulo do Wikibooks para os três primeiros Harry Potter, entregue diretamente à geração atual. A coleta é temporária, exige correspondência da edição e preserva lacunas; não há pesquisa web genérica. As fases 26–28 continuam propostas. A prioridade é reduzir o cadastro manual e a coleta de fontes pelo Admin. O orçamento anterior de API zero continua valendo; não habilitar fornecedores ou fallbacks pagos.
 
 ## Experiência pretendida
 
@@ -99,5 +99,7 @@ Cada fase mantém a regra do projeto: verificar o que mudou, revisar diff/segred
 | 28 — Avaliação e entrega | Livros reais representativos, fontes, qualidade, custo operacional e regressões | Relatório distingue dados encontrados, inferências rejeitadas e lacunas; fronteiras, Recall, timeline, retrocesso e autorização preservados |
 
 Operação entregue da fase 24: [descoberta de fontes públicas](source-discovery.md). Ela consulta APIs fixas, apresenta candidatos e não coleta texto de artigos, não preenche fontes do gerador e não cria conteúdo editorial.
+
+Operação entregue da fase 25: [preparação automática por capítulo](automatic-sources.md). O coletor usa somente Sinopse/Synopsis em revisões fixadas, não as análises ou links gerais da descoberta bibliográfica. Revisão, importação em rascunho e publicação permanecem manuais. Não há worker durável nem retomada após reinício.
 
 A fase 23 reutiliza uma integração funcional e remove o cadastro duplicado no Admin. A avaliação inicial prioriza os três primeiros livros de Harry Potter, indicados pelo usuário; os resultados e lacunas estão no [levantamento de fontes](harry-potter-source-assessment.md). A avaliação das próximas fases deve contemplar pelo menos um caso com fonte narrativa estruturada e outro com cobertura insuficiente. Ausência de fonte é um resultado esperado e visível, não um motivo para gerar conteúdo sem evidência.

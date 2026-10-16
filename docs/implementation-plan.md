@@ -46,10 +46,11 @@ Cada fase termina com validações pertinentes, inspeção do diff e de segredos
 | 22 | Regressões, avaliação controlada e documentação | Suíte completa, auditorias, jornada pela origem Next.js, CI sem API real e ausência de migration |
 | 23 | Busca e importação de edições no Admin, com serviço compartilhado com o leitor | Confirmação da edição, idempotência, concorrência, autorização, sem vínculo pessoal nem criação de lore |
 | 24 | Descoberta limitada de sumário e referências bibliográficas públicas, com procedência e lacunas | Admin/CSRF, edição do servidor, filtragem de adaptações, limites de HTTP, falhas parciais e nenhuma gravação editorial |
+| 25 | Coleta automática de sinopses do Wikibooks por capítulo e entrega ao gerador | Três Harry Potter, revisões/fontes/licenças, Admin/CSRF/posse, idempotência, expiração, cancelamento e rascunho revisado |
 
 As fases 18 a 22 seguem o [plano de geração assistida](assisted-generation-plan.md). A operação entregue está descrita em [assisted-generation.md](assisted-generation.md).
 
-As fases 23 e 24 iniciam o [plano de preparação automatizada](automated-preparation-plan.md). As fases 25–28 continuam propostas. O [levantamento de Harry Potter](harry-potter-source-assessment.md) registra a cobertura e as lacunas dos três livros priorizados, e o [guia de descoberta](source-discovery.md) descreve a operação entregue.
+As fases 23–25 iniciam o [plano de preparação automatizada](automated-preparation-plan.md). As fases 26–28 continuam propostas. O [levantamento de Harry Potter](harry-potter-source-assessment.md) registra a investigação inicial; o [guia da coleta automática](automatic-sources.md) documenta as fontes estruturadas e o caminho entregue posteriormente.
 
 ### Aceite da fase 16
 

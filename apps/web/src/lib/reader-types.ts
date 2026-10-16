@@ -13,6 +13,8 @@ export type Book = {
   publishedDate: string | null;
   language: string | null;
   memoryPackAvailable: boolean;
+  memoryPackSourceUrl?: string | null;
+  memoryPackAttribution?: string | null;
   readingOutlineAvailable: boolean;
   memoryPackStatus: MemoryPackStatus;
   canRequestMemoryPack: boolean;

@@ -38,4 +38,4 @@ Na validação da fase 24, a jornada pelo Next.js em `127.0.0.1:3018`, com API e
 3. **Fase 25:** aceitar somente fontes com unidade e correspondência verificadas; preservar lacunas. Dados gerais e artigos retrospectivos continuam fora do contexto de extração inicial.
 4. **Avaliação editorial:** comparar cada prefixo conhecido, suspeitas, aliases e revelações posteriores. Citações textuais comprovam origem, mas não garantem veracidade nem ausência de spoiler.
 
-O caminho atual de geração com fontes fornecidas pelo Admin permanece disponível para exceções. A automação futura deve reduzir trabalho sem inventar o que não foi encontrado, e manter revisão e publicação manuais.
+O caminho de geração com fontes fornecidas pelo Admin permanece disponível para exceções. Posteriormente a este levantamento inicial, a fase 25 verificou e implementou a coleta de sinopses estruturadas do Wikibooks para estas três obras. O [guia da coleta automática](automatic-sources.md) registra os índices, revisões, licença e verificações atuais; isso não resolve automaticamente correspondência de tradução/edição nem garante ausência semântica de spoilers.

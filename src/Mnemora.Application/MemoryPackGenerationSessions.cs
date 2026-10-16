@@ -16,7 +16,8 @@ public sealed record GenerationReport(string Provider, string Model, string Prom
     string? SourceAttribution, string? SourceUrl, bool IndexComplete, bool Partial,
     string PackHash, int Calls, int Tokens, int EstimatedTokens,
     IReadOnlyList<GenerationUnitCoverage> Units,
-    IReadOnlyList<GenerationReportEvidence> Evidence, IReadOnlyList<string> Diagnostics);
+    IReadOnlyList<GenerationReportEvidence> Evidence, IReadOnlyList<string> Diagnostics,
+    IReadOnlyList<GenerationSourceProvenance>? Sources = null);
 
 public sealed record GenerationSessionResult(GenerationSessionStatus Status,
     MemoryPackDocument Document, GenerationReport Report, MemoryPackValidationResult Validation,

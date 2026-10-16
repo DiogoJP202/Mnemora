@@ -22,6 +22,16 @@ public sealed class MemoryPackGenerationService(
 
     public async Task<GenerationSessionStatus> StartAsync(Guid ownerId, Guid bookId,
         GenerationStartRequest request, CancellationToken cancellationToken = default)
+        => await StartCoreAsync(ownerId, bookId, request, [], [], cancellationToken);
+
+    public Task<GenerationSessionStatus> StartPreparedAsync(Guid ownerId, Guid bookId,
+        GenerationStartRequest request, IReadOnlyList<GenerationSourceProvenance> provenance,
+        IReadOnlyList<string> diagnostics, CancellationToken cancellationToken = default)
+        => StartCoreAsync(ownerId, bookId, request, provenance, diagnostics, cancellationToken);
+
+    private async Task<GenerationSessionStatus> StartCoreAsync(Guid ownerId, Guid bookId,
+        GenerationStartRequest request, IReadOnlyList<GenerationSourceProvenance> provenance,
+        IReadOnlyList<string> diagnostics, CancellationToken cancellationToken)
     {
         EnsureAvailable();
         var book = await target.ReadAsync(bookId, cancellationToken: cancellationToken);
@@ -29,7 +39,8 @@ public sealed class MemoryPackGenerationService(
         if (issues.Any(issue => issue.IsBlocking))
             throw new GenerationException("invalid_sources", "Confira as fontes, atribuição e edição antes de gerar.");
         var document = assembler.Create(book, request);
-        return store.Create(ownerId, bookId, request, document, issues.Select(issue => issue.Message).ToArray());
+        return store.Create(ownerId, bookId, request, document,
+            issues.Select(issue => issue.Message).Concat(diagnostics).ToArray(), provenance);
     }
 
     public Task<GenerationSessionStatus> GetStatusAsync(Guid ownerId, Guid bookId, Guid runId,

@@ -4,7 +4,7 @@
 
 O MVP do Mnemora está implementado como web app mobile-first e PWA em português. A aplicação oferece cadastro e login, busca externa, cadastro manual de livros, gestão completa da estante, solicitação de memory packs, progresso por índice publicado, exploração segura de lore, Recall textual, notas privadas, revisão simples e um painel administrativo com workflow editorial, geração assistida e transferência de pacotes completos em JSON. A regra antisspoiler permanece no backend e impede que rascunhos ou dados futuros sejam enviados ao frontend do leitor. O Admin mantém acesso editorial ao documento completo.
 
-Este relatório foi atualizado em 15 de outubro de 2026. As fases 18 a 21 foram publicadas em `origin/main`, e a fase 22 encerra as regressões e a documentação da geração assistida. O [CI da fase 21](https://github.com/DiogoJP202/Mnemora/actions/runs/38750203393) aprovou backend, frontend e imagem Docker com health check. A funcionalidade permanece desabilitada sem configuração de Groq no backend; não foi habilitada nem avaliada com API real na demonstração pública. As evidências de deploy das fases anteriores continuam registradas como histórico.
+Este relatório foi atualizado em 16 de outubro de 2026, com a entrega da fase 25 de coleta narrativa automática para os três primeiros Harry Potter. As fases 18 a 24 e a correção de configuração local estão publicadas em `origin/main`; as verificações da fase atual estão registradas abaixo. A geração permanece desabilitada sem configuração de Groq no backend. As evidências de deploy e de CI das fases anteriores continuam registradas como histórico; não comprovam a publicação da fase atual ou sua avaliação com Groq em produção.
 
 ## Histórico por fase
 
@@ -35,7 +35,9 @@ Este relatório foi atualizado em 15 de outubro de 2026. As fases 18 a 21 foram 
 | 21 — Jornada no Admin | `7f85756` | Entrada, progresso, revisão por capítulo, downloads, JSON editável, parcial confirmado e transferência existente |
 | 22 — Qualidade e entrega | `429e3b9` | Regressões, auditorias, avaliação controlada, guia de configuração e limitações |
 | 23 — Busca administrativa | `375587e` | Busca por título/autor/ISBN, confirmação, importação compartilhada e levantamento de fontes dos três primeiros Harry Potter |
-| 24 — Descoberta de fontes | Commit `phase 24: discover bounded public book references` | Sumário da edição, Wikidata, links da Wikipedia, correspondência bibliográfica, procedência e lacunas |
+| 24 — Descoberta de fontes | `cdb2cc2` | Sumário da edição, Wikidata, links da Wikipedia, correspondência bibliográfica, procedência e lacunas |
+| Configuração persistente e extração | `944cf6f` | User secrets local, diagnóstico no Admin e prompt incremental v2 |
+| 25 — Fontes automáticas por capítulo | Commit `phase 25: prepare narrative sources automatically` | Wikibooks para três Harry Potter, coleta incremental protegida, procedência/licença, geração sem resumos manuais e créditos públicos seguros |
 
 ## Funcionalidades entregues
 
@@ -257,7 +259,7 @@ Em `/admin/books`, **Buscar livro para preparar** consulta o catálogo compartil
 
 A jornada usou o build de produção do Next.js em `3019`, uma API Kestrel isolada em `5198` e um proxy de QA em `127.0.0.1:3018`, encaminhando `/api` para essa API. Os processos e dados locais do usuário em `3000`/`5100` foram preservados. Os testes de integração verificam os headers `no-store` e a política de antiforgery; o proxy temporário de QA não é código de implantação.
 
-O [levantamento de fontes dos três primeiros Harry Potter](harry-potter-source-assessment.md) encontrou metadados, mas nenhum sumário nas três edições amostradas. Fontes narrativas completas por capítulo ainda não foram verificadas. A descoberta limitada foi acrescentada na fase 24 abaixo; coleta e preparação integrada seguem nas fases propostas [25–28](automated-preparation-plan.md).
+O [levantamento inicial dos três primeiros Harry Potter](harry-potter-source-assessment.md) encontrou metadados, mas nenhum sumário nas três edições amostradas. A fase 24 acrescentou descoberta bibliográfica; posteriormente, a fase 25 passou a coletar sinopses estruturadas do Wikibooks. As fases [26–28](automated-preparation-plan.md) continuam propostas.
 
 ## Entrega da fase 24 — descoberta limitada de fontes
 
@@ -272,7 +274,13 @@ O detalhe administrativo oferece **Encontrar referências públicas**. O backend
 | Jornada pela origem do Next.js | Aprovada em `127.0.0.1:3018`, API isolada `5198` | Login, lista, detalhe, descoberta, revisão de procedência e download; geração desabilitada e nenhum consumo Groq |
 | Layout | 360 e 1280 px, claro/escuro | Painel, links e hashes sem rolagem horizontal |
 
-Não houve migration, gravação de conteúdo editorial ou publicação. São no máximo três chamadas por consulta sem cache, dois hosts HTTPS fixos sem redirects, 1 MiB por resposta, oito segundos por chamada e prazo de 25 segundos; uma operação global por processo e cache por identidade. O [guia de descoberta](source-discovery.md) documenta limitações e o significado do hash de links descobertos. Os dados reais encontrados estão no [levantamento de Harry Potter](harry-potter-source-assessment.md). A coleta narrativa e sua organização por capítulo continuam sendo a fase 25.
+Não houve migration, gravação de conteúdo editorial ou publicação. São no máximo três chamadas por consulta sem cache, dois hosts HTTPS fixos sem redirects, 1 MiB por resposta, oito segundos por chamada e prazo de 25 segundos; uma operação global por processo e cache por identidade. O [guia de descoberta](source-discovery.md) documenta limitações e o significado do hash de links descobertos. Os dados iniciais estão no [levantamento de Harry Potter](harry-potter-source-assessment.md).
+
+### Fase 25 — Coleta narrativa automática
+
+O Admin agora usa **Buscar e preparar fontes** para obter índice e sinopses dos três primeiros Harry Potter no Wikibooks. A seleção é por obra conhecida e autoria, com confirmação explícita de edição; o coletor lê somente Sinopse/Synopsis, fixa revisões, conserva lacunas e não segue links de personagens. A geração recebe fontes do backend sem copiar resumos ou montar JSON. Evidências e licença seguem em relatório separado; importação em rascunho e publicação manual continuam.
+
+Foram aprovados 315 testes de backend, 40 testes de PWA/segurança, lint e build. O navegador coletou as 17 sinopses de Pedra Filosofal com APIs reais, processou-as com IA fictícia e validou/importou o pacote de teste em rascunho, sem publicação. Os três índices (17/18/22) e seis sinopses iniciais/finais também foram conferidos contra APIs reais. Cancelamento e layout a 360 px em claro/escuro foram verificados. A coleta não consumiu Groq; esse teste não mede qualidade editorial ou tokens de um livro inteiro. Veja [operação, limites e evidências](automatic-sources.md).
 
 ## Roteiro de aceite reproduzível
 
@@ -357,7 +365,7 @@ Para verificar a PWA em condições reais de service worker, execute o build de 
 ## Limitações e trabalho futuro
 
 - Recuperação de senha é informativa no MVP; não há envio de e-mail nem fluxo de redefinição.
-- Busca semântica, respostas por IA ao leitor e obtenção automática de fontes narrativas não estão implementadas. A geração editorial assistida exige fontes fornecidas e revisão humana.
+- Busca semântica e respostas por IA ao leitor não estão implementadas. A geração editorial aceita sinopses coletadas automaticamente para os três primeiros Harry Potter ou fontes manuais para outras obras, sempre com revisão humana. A busca web narrativa genérica não foi implementada.
 - A revisão registra feedback, mas não agenda cartões nem implementa repetição espaçada.
 - A Open Library funciona sem chave; o Google Books só participa quando `GOOGLE_BOOKS_API_KEY` está configurada.
 - Número de páginas, categorias e rótulo de edição são usados na busca e confirmação, mas não são persistidos no modelo atual de `Book`.

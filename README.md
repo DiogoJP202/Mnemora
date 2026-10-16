@@ -259,6 +259,7 @@ Todos os endpoints vivem sob `/api`. Rotas de escrita exigem `X-CSRF-TOKEN`; as 
 | Revisão | `GET /api/books/{bookId}/review`, `POST /api/books/{bookId}/review/{entityId}` |
 | Administração | `/api/admin/books`, workflow `/memory-pack/*` incluindo `GET /export`, `POST /validate` e `POST /import`, consulta/importação de `/reading-outline/*`, unidades, entidades, aliases, fatos, relações e previews seguros |
 | Geração assistida (Admin) | `/api/admin/books/{bookId}/memory-pack/generations`: disponibilidade, separação das fontes, criação de sessão, progresso, avanço, resultado e cancelamento |
+| Fontes automáticas (Admin) | `/api/admin/books/{bookId}/source-preparations`: índice, coleta por capítulo, cobertura, cancelamento e transferência para a geração |
 
 O formulário do livro grava `status`, `currentReadingUnitId` e `currentPage` em uma única chamada a `PATCH /api/library/{bookId}/progress`. Campos ausentes preservam o valor atual; `null` explícito limpa unidade ou página, e todos os valores são validados antes de qualquer mutação. Um status explícito prevalece sobre a inferência automática de `Reading`. Selecionar “Nenhuma — limpar ponto de leitura” restaura o escopo sem progresso e revoga imediatamente o lore anteriormente visível; marcar `Finished` nunca concede conhecimento por conta própria.
 
@@ -292,7 +293,7 @@ Depois da importação, os controles existentes permitem consultar sumário, pre
 
 No detalhe administrativo, use **Encontrar referências públicas → Descobrir fontes públicas**. O servidor confere a edição exata na Open Library, procura até três candidatos no Wikidata, descarta tipos não literários e apresenta links da Wikipedia em português e inglês quando disponíveis. O painel distingue ISBN, vínculo da obra e correspondência não confirmada; mostra sumário candidato, lacunas e procedência e permite baixar o levantamento. Não exige chave adicional nem chama IA.
 
-**Coleta automática de fontes narrativas ainda não está implementada.** Referências e sinopses gerais podem conter spoilers; não são enviadas ao gerador nem transformadas em capítulos ou lore. A API é `POST /api/admin/books/{id}/source-discovery`, protegida por Admin/CSRF, rate limit, HTTP limitado e respostas sem cache privado. Consulte o [guia de descoberta e seus limites](docs/source-discovery.md).
+Referências e sinopses gerais podem conter spoilers; essa descoberta bibliográfica não as envia ao gerador nem as transforma em lore. A API é `POST /api/admin/books/{id}/source-discovery`, protegida por Admin/CSRF, rate limit, HTTP limitado e respostas sem cache privado. A fase 25 acrescenta um caminho separado de [coleta de sinopses por capítulo](docs/automatic-sources.md), inicialmente para os três primeiros Harry Potter no Wikibooks.
 
 ### Importar um pacote editorial completo
 
@@ -302,7 +303,9 @@ Confira o [formato v1 e seu fluxo](docs/memory-pack-format.md), os limites e o [
 
 ### Gerar um pacote com IA
 
-No detalhe administrativo de um **livro compartilhado sem conteúdo editorial e sem publicação**, use **Gerar pacote com IA**. Cole resumos com cabeçalhos consecutivos `## Capítulo 1 — Título`, confira a edição e o índice e informe a atribuição. A geração processa cada capítulo em ordem e entrega o JSON v1 com um relatório separado de evidências. Revise candidatos, citações e revelações antes de enviar o documento à validação e importação atuais; ele sempre entra em rascunho. Capítulos sem resumo e índice não confirmado tornam o resultado parcial e exigem reconhecimento explícito.
+No detalhe administrativo de um **livro compartilhado sem conteúdo editorial e sem publicação**, use **Gerar pacote com IA → Buscar e preparar fontes**. Para Pedra Filosofal, Câmara Secreta e Prisioneiro de Azkaban, o backend obtém o índice e as seções de sinopse do guia comunitário Wikibooks, em português com alternativa inglesa por capítulo quando necessária. Confira a correspondência com a edição e então use **Gerar pacote com as fontes coletadas**. Você não precisa escrever resumos ou preparar um JSON para esse caminho. A entrada manual permanece em **Alternativa: fornecer resumos por capítulo manualmente**, para outras obras e exceções.
+
+A geração processa cada capítulo em ordem e entrega o JSON v1 com um relatório separado de evidências e fontes/revisões. Revise candidatos, citações e revelações antes de enviar à validação e importação atuais; o pacote sempre entra em rascunho. Capítulos sem sinopse e índice não confirmado tornam o resultado parcial e exigem reconhecimento explícito. Análises, páginas de personagens e conhecimento próprio do modelo não são usados para preencher lacunas.
 
 O recurso permanece **desabilitado por padrão**. Para habilitar, configure exclusivamente no backend `MemoryPackGeneration__Enabled=true`, `MemoryPackGeneration__Provider=Groq`, `MemoryPackGeneration__Model=openai/gpt-oss-120b` e `MemoryPackGeneration__ApiKey` como segredo. Confirme a organização no Groq Free antes de ativar: o aplicativo não verifica faturamento nem oferece fallback pago. Não coloque a chave no frontend ou no Git. A API .NET não lê arquivos `.env` automaticamente.
 
@@ -318,8 +321,8 @@ As fontes são enviadas ao Groq. Sessões ficam somente na memória do backend e
 - SQLite atende ao uso local e a uma implantação simples, sem a estratégia operacional de um banco multi-instância;
 - o modo offline cobre somente o shell público e assets estáticos, não biblioteca, notas, Admin ou outras respostas privadas;
 - cada usuário pode manter até 200 notas por livro, e o histórico de revisão conserva as 500 atividades mais recentes por usuário e livro;
-- o conteúdo de lore e seus pontos de revelação são curados pelo Admin, com autoria manual, geração assistida sobre fontes fornecidas ou importação de um pacote revisado; o formato v1 não substitui nem mescla conteúdo existente diferente;
-- a geração assistida não busca resumos na internet, não lê PDF/EPUB e não comprova semanticamente a veracidade nem a ausência de spoilers nas fontes; sessões temporárias e quotas podem interromper livros longos.
+- o conteúdo de lore e seus pontos de revelação são curados pelo Admin, com autoria manual, geração sobre sinopses coletadas ou fornecidas e importação de um pacote revisado; o formato v1 não substitui nem mescla conteúdo existente diferente;
+- a coleta pública inicial é restrita aos três primeiros Harry Potter e às seções narrativas permitidas do Wikibooks. Não há pesquisa web genérica, leitura de PDF/EPUB ou garantia semântica de veracidade/ausência de spoilers; sessões temporárias e quotas podem interromper livros longos.
 
 As evoluções candidatas estão registradas em [future.md](future.md).
 
