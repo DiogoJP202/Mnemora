@@ -34,6 +34,30 @@ O entrypoint usa `RENDER_EXTERNAL_URL` para configurar a origem web aceita pela 
 
 Se você adicionar um domínio próprio, configure `Mnemora__WebOrigin` com a origem HTTPS exata desse domínio e faça um novo deploy. Para acrescentar o Google Books à busca, adicione `GOOGLE_BOOKS_API_KEY` como secret em **Environment** e faça outro deploy. `OPEN_LIBRARY_CONTACT` é opcional e pode conter um e-mail ou URL de contato para o `User-Agent`; quando ausente, a aplicação usa a URL pública do repositório.
 
+## Admin inicial e falha na inicialização
+
+O Admin também pode ser provisionado na demonstração gratuita. No Dashboard do Render, abra o Web Service do Mnemora e **Environment**. Configure os valores nos campos de cada variável:
+
+| Variável | Valor esperado |
+|---|---|
+| `ADMIN_EMAIL` | E-mail válido do administrador, sem nome de exibição e sem aspas delimitadoras. |
+| `ADMIN_PASSWORD` | Senha privada com pelo menos 10 caracteres, uma maiúscula, uma minúscula e um número. Símbolos são opcionais. |
+
+Esses campos recebem somente o valor, sem `$env:`, `export` ou `NOME=valor`. Use **Save and deploy** para aplicar a configuração ao build existente, ou **Save, rebuild, and deploy** para também reconstruir o serviço. **Save only** só terá efeito no próximo deploy. Consulte as [opções oficiais de variáveis de ambiente do Render](https://render.com/docs/configure-environment-variables).
+
+Se o log mostrar `Não foi possível criar o Admin`, as migrations podem já ter terminado; a falha é na validação da conta pelo Identity. O seed agora apresenta somente códigos de diagnóstico, sem registrar e-mail, senha ou descrições que possam conter esses valores:
+
+| Código | O que conferir |
+|---|---|
+| `PasswordTooShort` | Mínimo de 10 caracteres. |
+| `PasswordRequiresUpper` / `PasswordRequiresLower` / `PasswordRequiresDigit` | Maiúscula, minúscula e número, respectivamente. |
+| `InvalidEmail` / `InvalidUserName` | E-mail válido, sem espaços, aspas delimitadoras ou nome de exibição. |
+| `DuplicateEmail` / `DuplicateUserName` | Conflito com uma conta existente; o seed não cria uma segunda identidade. |
+
+Configuração explícita inválida continua impedindo a inicialização para não criar um Admin incorreto. O entrypoint aguarda a API antes de iniciar o Next.js: `A API encerrou antes de ficar pronta` e `No open ports detected` são consequências dessa falha, sem necessidade de alterar a porta. Corrija o valor indicado e faça outro deploy. Em versões antigas, o erro é genérico; confira as duas variáveis ou publique a atualização para obter os códigos. Nunca compartilhe os valores das credenciais em logs ou mensagens de suporte.
+
+Reexecutar o seed preserva a senha de um Admin existente: mudar `ADMIN_PASSWORD` não redefine essa senha. Se o e-mail já pertencer a um leitor, só será promovido quando a senha configurada corresponder à conta. Sem ambas as variáveis, o pack de demonstração é criado sem provisionar um Admin. Em filesystem efêmero, um novo deploy pode perder a conta; a configuração válida permite recriá-la na inicialização.
+
 ## Validar a implantação
 
 Depois que o serviço ficar disponível:

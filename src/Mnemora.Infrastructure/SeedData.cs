@@ -29,9 +29,8 @@ public static class SeedData
             {
                 admin = new IdentityUser<Guid> { UserName = adminEmail, Email = adminEmail };
                 var created = await users.CreateAsync(admin, adminPassword);
-                if (!created.Succeeded)
-                    throw new InvalidOperationException(
-                        "Não foi possível criar o Admin. Verifique ADMIN_EMAIL e ADMIN_PASSWORD.");
+                EnsureSucceeded(created, "criar o Admin a partir de ADMIN_EMAIL e ADMIN_PASSWORD",
+                    AdminConfigurationHint(users.Options));
             }
             else if (!await users.IsInRoleAsync(admin, "Admin")
                      && !await users.CheckPasswordAsync(admin, adminPassword))
@@ -46,7 +45,7 @@ public static class SeedData
         }
         else
         {
-            logger.LogWarning("Admin de desenvolvimento não criado: configure ADMIN_EMAIL e ADMIN_PASSWORD.");
+            logger.LogWarning("Admin inicial não criado: configure ADMIN_EMAIL e ADMIN_PASSWORD.");
         }
 
         if (await db.Books.AnyAsync(x =>
@@ -135,12 +134,29 @@ public static class SeedData
         logger.LogInformation("Pack demonstrativo original criado: {BookId}", book.Id);
     }
 
-    private static void EnsureSucceeded(IdentityResult result, string operation)
+    private static void EnsureSucceeded(IdentityResult result, string operation, string? hint = null)
     {
         if (result.Succeeded) return;
         var errors = string.Join("; ", result.Errors.Select(error => error.Code));
         throw new InvalidOperationException(
-            $"Não foi possível {operation}. Erros do Identity: {errors}.");
+            $"Não foi possível {operation}. Erros do Identity: {errors}." +
+            (hint is null ? "" : $" {hint}"));
+    }
+
+    private static string AdminConfigurationHint(IdentityOptions options)
+    {
+        var password = options.Password;
+        var requirements = new List<string> { $"pelo menos {password.RequiredLength} caracteres" };
+        if (password.RequireUppercase) requirements.Add("uma letra maiúscula");
+        if (password.RequireLowercase) requirements.Add("uma letra minúscula");
+        if (password.RequireDigit) requirements.Add("um dígito");
+        if (password.RequireNonAlphanumeric) requirements.Add("um símbolo");
+        if (password.RequiredUniqueChars > 1)
+            requirements.Add($"{password.RequiredUniqueChars} caracteres distintos");
+
+        return "ADMIN_EMAIL deve ser um e-mail válido. ADMIN_PASSWORD deve conter " +
+            string.Join(", ", requirements) +
+            ". Configure os valores sem aspas delimitadoras nos campos do ambiente e reinicie o serviço.";
     }
 
     private static ReadingUnit Unit(Guid bookId, int order, string title, string safeLabel,

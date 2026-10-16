@@ -119,7 +119,7 @@ $env:ASPNETCORE_URLS = "http://localhost:5100"
 
 O launch profile de desenvolvimento já fixa `http://localhost:5100`. Para usar outra porta, edite `src/Mnemora.Api/Properties/launchSettings.json` ou execute `dotnet run --no-launch-profile --project src/Mnemora.Api --urls http://localhost:5199`; no comando padrão, o perfil tem precedência sobre `ASPNETCORE_URLS`.
 
-Para criar um Admin no seed, defina `ADMIN_EMAIL` e `ADMIN_PASSWORD` apenas no ambiente local. A senha precisa ter pelo menos 10 caracteres, uma letra maiúscula, uma minúscula e um dígito. Se o e-mail já pertencer a uma conta, o seed só atribui a role `Admin` quando a senha configurada corresponde à conta existente. Não grave credenciais, `.env.local` ou o banco SQLite no Git.
+Para criar um Admin no seed, defina `ADMIN_EMAIL` e `ADMIN_PASSWORD` no ambiente do backend; no Render, use os campos secretos de **Environment** conforme o [guia de implantação](docs/deployment.md#admin-inicial-e-falha-na-inicialização). A senha precisa ter pelo menos 10 caracteres, uma letra maiúscula, uma minúscula e um dígito. Se o e-mail já pertencer a uma conta sem a role `Admin`, o seed só atribui essa role quando a senha configurada corresponde à conta existente. O seed não troca a senha de um Admin já criado. Não grave credenciais, `.env.local` ou o banco SQLite no Git.
 
 Em produção, publique frontend e `/api` sob a mesma origem e termine TLS no proxy. Configure em `Mnemora__KnownProxies__0` somente o IP de cada proxy confiável; assim a API reconhece o esquema HTTPS e o endereço real usado pelos rate limits sem aceitar headers encaminhados de fontes arbitrárias.
 
